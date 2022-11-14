@@ -1703,7 +1703,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             int min_value = boost::lexical_cast<int>(range_min);
             int max_value = boost::lexical_cast<int>(range_max);
             int interval = max_value - min_value;
-            double r_value = model::generate_random(distribution_type);
+            double r_value = model::generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1713,7 +1713,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         case LITERAL_TYPES::STRING:{
             pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::ENGLISH_WORDS, range_min, range_max);
             int interval = range.second - range.first - 1;
-            double r_value = model::generate_random(distribution_type);
+            double r_value = model::generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1730,7 +1730,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         case LITERAL_TYPES::NAME:{
             pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::FIRST_NAMES, range_min, range_max);
             int interval = range.second - range.first - 1;
-            double r_value = model::generate_random(distribution_type);
+            double r_value = model::generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1748,7 +1748,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             max_iss>>max_time;
             boost::posix_time::time_duration range (max_time - min_time);
             long interval = range.total_seconds();
-            double r_value = model::generate_random(distribution_type);
+            double r_value = model::generate_random(distribution_type, interval);
             long offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
