@@ -42,15 +42,15 @@ void dictionary::init(){
                 break;
             }
             case 1:{
-                fis.open("../../files/firstnames.txt");
+                fis.open("/usr/share/dict/firstnames");
                 break;
             }
             case 2:{
-                fis.open("../../files/lastnames.txt");
+                fis.open("/usr/share/dict/lastnames");
                 break;
             }
             case 3:{
-                fis.open("../../files/countries.txt");
+                fis.open("/usr/share/dict/countries");
             }
         }
         string line, token;
