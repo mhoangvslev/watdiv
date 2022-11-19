@@ -24,12 +24,10 @@ You may also download the [test workloads](https://dsg.uwaterloo.ca/watdiv/stres
 
 ```bash
 sudo apt install libboost-all-dev
-tar xvf watdiv_v05.tar
-cd watdiv
 # setenv BOOST_HOME <BOOST-INSTALLATION-DIRECTORY>
 export BOOST_HOME=<BOOST-INSTALLATION-DIRECTORY> #(in bash)
-make
-cd bin/Release
+make rebuild
+sudo make install
 ```
 
 2. The last step above is important. To run the data generator, issue the following command:

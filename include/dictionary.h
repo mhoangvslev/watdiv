@@ -9,7 +9,8 @@ namespace DICTIONARY_TYPES {
         ENGLISH_WORDS,
         FIRST_NAMES,
         LAST_NAMES,
-        COUNT
+        COUNTRY,
+        COUNT,
     };
 };
 
@@ -22,7 +23,7 @@ class dictionary{
         static dictionary * get_instance();
         static void destroy_instance();
 
-        void init (const char * words_filename, const char * firstnames_filename, const char * lastnames_filename);
+        void init ();
 
         unsigned int word_count (DICTIONARY_TYPES::enum_t dictionary_type);
         string * get_word (DICTIONARY_TYPES::enum_t dictionary_type, unsigned int index);

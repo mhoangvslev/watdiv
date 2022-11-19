@@ -31,23 +31,26 @@ void dictionary::destroy_instance(){
     _instance = NULL;
 }
 
-void dictionary::init (const char * words_filename, const char * firstnames_filename, const char * lastnames_filename){
+void dictionary::init(){
     //cout<<"Initializing dictionary..."<<"\n";
 
     for (int i=0; i<DICTIONARY_TYPES::COUNT; i++){
         ifstream fis;
         switch (i){
             case 0:{
-                fis.open(words_filename);
+                fis.open("/usr/share/dict/words");
                 break;
             }
             case 1:{
-                fis.open(firstnames_filename);
+                fis.open("../../files/firstnames.txt");
                 break;
             }
             case 2:{
-                fis.open(lastnames_filename);
+                fis.open("../../files/lastnames.txt");
                 break;
+            }
+            case 3:{
+                fis.open("../../files/countries.txt");
             }
         }
         string line, token;

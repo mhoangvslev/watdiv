@@ -150,6 +150,14 @@ void statistics::extract_schema(const model & mdl){
                         vertex2.append("integer");
                         break;
                     }
+                    case LITERAL_TYPES::FLOAT:{
+                        vertex2.append("float");
+                        break;
+                    }
+                    case LITERAL_TYPES::COUNTRY:{
+                        vertex2.append("country");
+                        break;
+                    }
                     case LITERAL_TYPES::NAME:{
                         vertex2.append("name");
                         break;
@@ -204,7 +212,7 @@ void statistics::populate_graph(const vector<statistics_st> & tuples){
 //            graph[inferred_vertex].insert(tuple);
 //        }
 
-        if (tuple._vertex2.compare("date") !=0 && tuple._vertex2.compare("integer") !=0 && tuple._vertex2.compare("name") !=0 && tuple._vertex2.compare("string")){
+        if (tuple._vertex2.compare("date") !=0 && tuple._vertex2.compare("integer") !=0 && tuple._vertex2.compare("name") !=0 && tuple._vertex2.compare("string") && tuple._vertex2.compare("float") && tuple._vertex2.compare("country") ){
             if (graph.find(tuple._vertex2)==graph.end()){
                 graph.insert(pair<string, set<statistics_st> >(tuple._vertex2, set<statistics_st>()));
             }
@@ -304,7 +312,7 @@ bool statistics::traverse_graph(int max_size, int const_count, bool constJoinVer
         query_str.append("\t");
         query_str.append(itr1->_edge);
         query_str.append("\t");
-        if (v2_base.compare("date") !=0 && v2_base.compare("integer") !=0 && v2_base.compare("name") !=0 && v2_base.compare("string")){
+        if (v2_base.compare("date") !=0 && v2_base.compare("integer") !=0 && v2_base.compare("name") !=0 && v2_base.compare("string") && v2_base.compare("float") && v2_base.compare("country") ){
             if (q_vertex_map.find(v2_base)==q_vertex_map.end()){
                 q_vertex_map.insert(pair<string, int>(v2_base, var_count));
                 var_count++;
@@ -356,7 +364,7 @@ bool statistics::traverse_graph(int max_size, int const_count, bool constJoinVer
         }
         query_graph[v1_base].insert(*itr1);
 
-        if (v2_base.compare("date") !=0 && v2_base.compare("integer") !=0 && v2_base.compare("name") !=0 && v2_base.compare("string")){
+        if (v2_base.compare("date") !=0 && v2_base.compare("integer") !=0 && v2_base.compare("name") !=0 && v2_base.compare("string") && v2_base.compare("float") && v2_base.compare("country")){
             if (query_graph.find(v2_base)==query_graph.end()){
                 query_graph.insert(pair<string, set<statistics_st> >(v2_base, set<statistics_st>()));
             }
@@ -494,7 +502,7 @@ bool statistics::traverse_graph(int max_size, int const_count, bool constJoinVer
         vector<string> eligible_list;
         for (map<string, set<string> >::iterator itr=variable_map.begin(); itr!=variable_map.end(); itr++){
             string var_type = *(itr->second.begin());
-            if (var_type.compare("date")==0 || var_type.compare("integer")==0 || var_type.compare("name")==0 || var_type.compare("string")==0){
+            if (var_type.compare("date")==0 || var_type.compare("integer")==0 || var_type.compare("name")==0 || var_type.compare("string")==0 || var_type.compare("float") || var_type.compare("country")){
                 continue;
             }
             eligible_list.push_back(itr->first);
@@ -571,7 +579,7 @@ void statistics::print_graph() const{
         cout<< itr1->first << " " << "[" << "label=\"" << itr1->first << "\"];" << "\n";
         for (set<statistics_st>::const_iterator itr2=edge_list.begin(); itr2!=edge_list.end(); itr2++){
             // You need to handle literals separately...
-            if (itr2->_vertex2.compare("date") !=0 && itr2->_vertex2.compare("integer") !=0 && itr2->_vertex2.compare("name") !=0 && itr2->_vertex2.compare("string")){
+            if (itr2->_vertex2.compare("date") !=0 && itr2->_vertex2.compare("integer") !=0 && itr2->_vertex2.compare("name") !=0 && itr2->_vertex2.compare("string") && itr2->_vertex2.compare("float") && itr2->_vertex2.compare("country")){
                 cout << itr1->first << " -> " << itr2->_vertex2 << " " << "[" << "label=\"" << itr2->_edge << "\"];" << "\n";
                 //cout << itr2->_vertex2<< " " << "[" << "label=\"" << itr2->_vertex2 << "\"];" << "\n";
             } else {

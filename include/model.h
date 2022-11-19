@@ -20,8 +20,10 @@ using namespace std;
 namespace LITERAL_TYPES {
     enum enum_t {
         INTEGER,
+        FLOAT,
         STRING,
         NAME,
+        COUNTRY,
         DATE,
         UNDEFINED
     };

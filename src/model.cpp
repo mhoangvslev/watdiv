@@ -249,11 +249,13 @@ void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type){
     _label = label;
     _literal_type = literal_type;
     switch (_literal_type){
+        case LITERAL_TYPES::FLOAT:
         case LITERAL_TYPES::INTEGER:{
             _range_min = boost::lexical_cast<string>(numeric_limits<unsigned short>::min());
             _range_max = boost::lexical_cast<string>(numeric_limits<unsigned short>::max());
             break;
         }
+        case LITERAL_TYPES::COUNTRY:
         case LITERAL_TYPES::STRING:
         case LITERAL_TYPES::NAME:{
             _range_min = string("A");
@@ -323,10 +325,14 @@ predicate_m_t * predicate_m_t::parse (const string & line){
             case 2:{
                 if (token.compare("integer")==0 || token.compare("INTEGER")==0){
                     literal_type = LITERAL_TYPES::INTEGER;
+                } else if (token.compare("float")==0 || token.compare("FLOAT")==0){
+                    literal_type = LITERAL_TYPES::FLOAT;
                 } else if (token.compare("string")==0 || token.compare("STRING")==0){
                     literal_type = LITERAL_TYPES::STRING;
                 } else if (token.compare("name")==0 || token.compare("NAME")==0){
                     literal_type = LITERAL_TYPES::NAME;
+                } else if (token.compare("country")==0 || token.compare("COUNTRY")==0){
+                    literal_type = LITERAL_TYPES::COUNTRY;
                 } else if (token.compare("date")==0 || token.compare("DATE")==0){
                     literal_type = LITERAL_TYPES::DATE;
                 }
@@ -993,11 +999,13 @@ void mapping_m_t::init (const string & var_name, LITERAL_TYPES::enum_t literal_t
     _type_restriction = NULL;
     _distribution_type = DISTRIBUTION_TYPES::UNIFORM;
     switch (_literal_type){
+        case LITERAL_TYPES::FLOAT:
         case LITERAL_TYPES::INTEGER:{
             _range_min = boost::lexical_cast<string>(numeric_limits<unsigned short>::min());
             _range_max = boost::lexical_cast<string>(numeric_limits<unsigned short>::max());
             break;
         }
+        case LITERAL_TYPES::COUNTRY:
         case LITERAL_TYPES::STRING:
         case LITERAL_TYPES::NAME:{
             _range_min = string("A");
@@ -1206,12 +1214,16 @@ mapping_m_t * mapping_m_t::parse (const string & line){
             case 2:{
                 if (token.compare("integer")==0 || token.compare("INTEGER")==0){
                     literal_type = LITERAL_TYPES::INTEGER;
+                } else if (token.compare("float")==0 || token.compare("FLOAT")==0){
+                    literal_type = LITERAL_TYPES::FLOAT;
                 } else if (token.compare("string")==0 || token.compare("STRING")==0){
                     literal_type = LITERAL_TYPES::STRING;
                 } else if (token.compare("name")==0 || token.compare("NAME")==0){
                     literal_type = LITERAL_TYPES::NAME;
+                } else if (token.compare("country")==0 || token.compare("COUNTRY")==0){
+                    literal_type = LITERAL_TYPES::COUNTRY;
                 } else if (token.compare("date")==0 || token.compare("date")==0){
-                    literal_type = LITERAL_TYPES::STRING;
+                    literal_type = LITERAL_TYPES::DATE;
                 } else {
                     is_literal_type = false;
                     int pos = token.find_first_of('@');
@@ -1710,6 +1722,22 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             literal.append(boost::lexical_cast<string>(min_value + offset));
             break;
         }
+        case LITERAL_TYPES::FLOAT:{
+            double min_value = boost::lexical_cast<double>(range_min);
+            double max_value = boost::lexical_cast<double>(range_max);
+            double interval = max_value - min_value;
+            double r_value = model::generate_random(distribution_type, interval);
+            double offset = round(r_value * interval);
+            offset = (offset<0) ? 0 : offset;
+            offset = (offset>interval) ? interval : offset;
+
+            std::ostringstream ss;
+            ss << std::fixed << std::setprecision(2);
+            ss << (min_value + offset);
+            
+            literal.append(ss.str());
+            break;
+        }
         case LITERAL_TYPES::STRING:{
             pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::ENGLISH_WORDS, range_min, range_max);
             int interval = range.second - range.first - 1;
@@ -1735,6 +1763,16 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
             literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::FIRST_NAMES, range.first + offset)));
+            break;
+        }
+        case LITERAL_TYPES::COUNTRY:{
+            pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::COUNTRY, range_min, range_max);
+            int interval = range.second - range.first - 1;
+            double r_value = model::generate_random(distribution_type, interval);
+            int offset = round(r_value * interval);
+            offset = (offset<0) ? 0 : offset;
+            offset = (offset>interval) ? interval : offset;
+            literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::COUNTRY, range.first + offset)));
             break;
         }
         case LITERAL_TYPES::DATE:{
@@ -2156,7 +2194,7 @@ void model::save (const char * filename) const{
 int main(int argc, const char* argv[]) {
     dictionary * dict = dictionary::get_instance();
     if ( (argc==2 || argc==4 || argc==5 || argc>=6) && argv[1][0]=='-'){
-        dict->init("/usr/share/dict/words", "../../files/firstnames.txt", "../../files/lastnames.txt");
+        dict->init();
         const char * model_filename = argv[2];
         model cur_model (model_filename);
         //statistics stat (cur_model);

@@ -105,5 +105,11 @@ clean_release:
 	rm -rf bin/Release
 	rm -rf $(OBJDIR_RELEASE)/src
 
+install:
+	chmod +x ${OUT_RELEASE}
+	cp ${OUT_RELEASE} /usr/local/bin/
+
+rebuild: clean debug release
+
 .PHONY: before_debug after_debug clean_debug before_release after_release clean_release
 
