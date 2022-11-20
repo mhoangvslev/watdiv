@@ -12,7 +12,7 @@ LD = g++
 WINDRES = windres
 
 INC =  -Iinclude -I$(BOOST_HOME)/include
-CFLAGS = -static-libstdc++ -static-libgo -static-libgcc -std=c++0x -Wall
+CFLAGS = -std=c++0x -Wall
 RESINC = 
 LIBDIR =  -L$(BOOST_HOME)/lib
 #LIB =  $(BOOST_HOME)/lib/libboost_date_time.a

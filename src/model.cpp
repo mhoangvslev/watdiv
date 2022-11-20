@@ -255,7 +255,7 @@ void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type){
             _range_max = boost::lexical_cast<string>(numeric_limits<unsigned short>::max());
             break;
         }
-        case LITERAL_TYPES::COUNTRY:
+        //case LITERAL_TYPES::COUNTRY:
         case LITERAL_TYPES::STRING:
         case LITERAL_TYPES::NAME:{
             _range_min = string("A");
@@ -379,18 +379,22 @@ string predicate_m_t::generate (const namespace_map & n_map){
     result.append(n_map.replace(_label));
     result.append(">");
     result.append("\t");
+    result.append("\"");
+    result.append(literal);
+    result.append("\"");
 
     switch (_literal_type) {
-        case LITERAL_TYPES::INTEGER:
+        case LITERAL_TYPES::INTEGER:{
+            result.append("^^<http://www.w3.org/2001/XMLSchema#integer>");
+            break;
+        }
         case LITERAL_TYPES::FLOAT: {
-            result.append(literal);
+            result.append("^^<http://www.w3.org/2001/XMLSchema#double>");
             break;
         }
 
         case LITERAL_TYPES::DATE:{
-            result.append("\"");
-            result.append(literal);
-            result.append("\"^^http://www.w3.org/2001/XMLSchema#dateType");
+            result.append("^^<http://www.w3.org/2001/XMLSchema#dateType>");
             break;
         }
 
@@ -404,23 +408,16 @@ string predicate_m_t::generate (const namespace_map & n_map){
             loffset = (loffset>linterval) ? linterval : loffset;
             string langtag = *(dictionary::get_instance()->get_word(DICTIONARY_TYPES::LANGTAGS, lrange.first + loffset));
 
-            result.append("\"");
-            result.append(literal);
-            result.append("\"");
-
-            literal.append("@");
-            literal.append(langtag);
+            result.append("@");
+            result.append(langtag);
             break;
         }
 
-        case LITERAL_TYPES::COUNTRY:
-        case LITERAL_TYPES::NAME:
-        default: {
-            result.append("\"");
-            result.append(literal);
-            result.append("\"");
-            break;
-        }
+        // case LITERAL_TYPES::COUNTRY:
+        // case LITERAL_TYPES::NAME: {
+        
+        //     break;
+        // }
     }
     
     return result;

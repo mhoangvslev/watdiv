@@ -95,10 +95,11 @@ string * dictionary::get_word (DICTIONARY_TYPES::enum_t dictionary_type, unsigne
 
 pair<unsigned int, unsigned int> dictionary::get_interval (DICTIONARY_TYPES::enum_t dictionary_type, const string & range_min, const string & range_max){
     // The interval is closed on the lower-bound and open on the upper-bound...
-    vector<string>::iterator low, high;
-    low = lower_bound(_words[((int)dictionary_type)].begin(), _words[((int)dictionary_type)].end(), range_min);
-    high = upper_bound(_words[((int)dictionary_type)].begin(), _words[((int)dictionary_type)].end(), range_max);
-    return pair<unsigned int, unsigned int> (low-_words[((int)dictionary_type)].begin(), high-_words[((int)dictionary_type)].begin());
+    //vector<string>::iterator low, high;
+    // low = lower_bound(_words[((int)dictionary_type)].begin(), _words[((int)dictionary_type)].end(), range_min);
+    // high = upper_bound(_words[((int)dictionary_type)].begin(), _words[((int)dictionary_type)].end(), range_max);
+    // return pair<unsigned int, unsigned int> (low-_words[((int)dictionary_type)].begin(), high-_words[((int)dictionary_type)].begin());
+    return pair<unsigned int, unsigned int> (0, _words[((int)dictionary_type)].size());
 }
 
 
