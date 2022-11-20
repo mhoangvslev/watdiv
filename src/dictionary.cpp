@@ -51,6 +51,11 @@ void dictionary::init(){
             }
             case 3:{
                 fis.open("/usr/share/dict/countries");
+                break;
+            }
+            case 4:{
+                fis.open("/usr/share/dict/langtags");
+                break;
             }
         }
         string line, token;

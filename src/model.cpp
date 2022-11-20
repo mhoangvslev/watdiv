@@ -379,9 +379,50 @@ string predicate_m_t::generate (const namespace_map & n_map){
     result.append(n_map.replace(_label));
     result.append(">");
     result.append("\t");
-    result.append("\"");
-    result.append(literal);
-    result.append("\"");
+
+    switch (_literal_type) {
+        case LITERAL_TYPES::INTEGER:
+        case LITERAL_TYPES::FLOAT: {
+            result.append(literal);
+            break;
+        }
+
+        case LITERAL_TYPES::DATE:{
+            result.append("\"");
+            result.append(literal);
+            result.append("\"^^http://www.w3.org/2001/XMLSchema#dateType");
+            break;
+        }
+
+        case LITERAL_TYPES::STRING: {
+            // Assign langtags randomly
+            pair<unsigned int, unsigned int> lrange = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::LANGTAGS, _range_min, _range_max);
+            int linterval = lrange.second - lrange.first - 1;
+            double lr_value = model::generate_random(_distribution_type, linterval);
+            int loffset = round(lr_value * linterval);
+            loffset = (loffset<0) ? 0 : loffset;
+            loffset = (loffset>linterval) ? linterval : loffset;
+            string langtag = *(dictionary::get_instance()->get_word(DICTIONARY_TYPES::LANGTAGS, lrange.first + loffset));
+
+            result.append("\"");
+            result.append(literal);
+            result.append("\"");
+
+            literal.append("@");
+            literal.append(langtag);
+            break;
+        }
+
+        case LITERAL_TYPES::COUNTRY:
+        case LITERAL_TYPES::NAME:
+        default: {
+            result.append("\"");
+            result.append(literal);
+            result.append("\"");
+            break;
+        }
+    }
+    
     return result;
 }
 
@@ -1727,7 +1768,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             double max_value = boost::lexical_cast<double>(range_max);
             double interval = max_value - min_value;
             double r_value = model::generate_random(distribution_type, interval);
-            double offset = round(r_value * interval);
+            double offset = r_value * interval;
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
 

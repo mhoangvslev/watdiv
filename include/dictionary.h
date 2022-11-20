@@ -10,6 +10,7 @@ namespace DICTIONARY_TYPES {
         FIRST_NAMES,
         LAST_NAMES,
         COUNTRY,
+        LANGTAGS,
         COUNT,
     };
 };
