@@ -42,19 +42,19 @@ void dictionary::init(){
                 break;
             }
             case 1:{
-                fis.open("/usr/share/dict/firstnames");
+                fis.open("/usr/local/share/dict/firstnames");
                 break;
             }
             case 2:{
-                fis.open("/usr/share/dict/lastnames");
+                fis.open("/usr/local/share/dict/lastnames");
                 break;
             }
             case 3:{
-                fis.open("/usr/share/dict/countries");
+                fis.open("/usr/local/share/dict/countries");
                 break;
             }
             case 4:{
-                fis.open("/usr/share/dict/langtags");
+                fis.open("/usr/local/share/dict/langtags");
                 break;
             }
         }

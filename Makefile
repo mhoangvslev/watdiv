@@ -50,7 +50,8 @@ all: debug release
 clean: clean_debug clean_release
 
 dependencies:
-	cp files/* /usr/share/dict/
+	mkdir -p /usr/local/share/dict/
+	cp files/* /usr/local/share/dict/
 
 before_debug: 
 	test -d bin/Debug || mkdir -p bin/Debug
@@ -58,7 +59,7 @@ before_debug:
 
 after_debug: 
 
-debug: dependencies before_debug out_debug after_debug
+debug: before_debug out_debug after_debug
 
 out_debug: $(OBJ_DEBUG) $(DEP_DEBUG)
 	$(LD) $(LDFLAGS_DEBUG) $(LIBDIR_DEBUG) $(OBJ_DEBUG) $(LIB_DEBUG) -o $(OUT_DEBUG)
@@ -86,7 +87,7 @@ before_release:
 
 after_release: 
 
-release: dependencies before_release out_release after_release
+release: before_release out_release after_release
 
 out_release: $(OBJ_RELEASE) $(DEP_RELEASE)
 	$(LD) $(LDFLAGS_RELEASE) $(LIBDIR_RELEASE) $(OBJ_RELEASE) $(LIB_RELEASE) -o $(OUT_RELEASE)
@@ -112,7 +113,7 @@ install:
 	chmod +x ${OUT_RELEASE}
 	cp ${OUT_RELEASE} /usr/local/bin/
 
-rebuild: clean debug release
+rebuild: clean dependencies debug release
 
 .PHONY: before_debug after_debug clean_debug before_release after_release clean_release
 
