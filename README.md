@@ -23,7 +23,7 @@ You may also download the [test workloads](https://dsg.uwaterloo.ca/watdiv/stres
 1. Compiling WatDiv (in C++) is straightforward---the only dependencies are the Boost libraries and the Unix words file (i.e., make sure you have a wordlist package installed under /usr/share/dict/). Once you have installed Boost, simply execute the following commands on UNIX:
 
 ```bash
-sudo apt install libboost-all-dev
+sudo apt install libboost-all-dev wamerican
 # setenv BOOST_HOME <BOOST-INSTALLATION-DIRECTORY>
 export BOOST_HOME=<BOOST-INSTALLATION-DIRECTORY> #(in bash)
 make rebuild
