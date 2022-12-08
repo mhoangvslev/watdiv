@@ -311,4 +311,19 @@ struct model{
     static void clear_zipfian_cache ();
 };
 
+struct random_bucket{
+    vector<double> _cumulativePercentage;
+    vector<string> _objects;
+    int _index;
+	double _totalPercentage;
+    unsigned long _seed;
+
+    random_bucket(int size);
+    random_bucket(int size, unsigned long seed);
+    ~random_bucket();
+
+    void add(double percentage, string obj);
+    string get_random();
+};
+
 #endif // MODEL_H

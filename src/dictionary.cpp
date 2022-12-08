@@ -49,14 +49,6 @@ void dictionary::init(){
                 fis.open("/usr/local/share/dict/lastnames");
                 break;
             }
-            case 3:{
-                fis.open("/usr/local/share/dict/countries");
-                break;
-            }
-            case 4:{
-                fis.open("/usr/local/share/dict/langtags");
-                break;
-            }
         }
         string line, token;
         while (fis.good() && !fis.eof()){

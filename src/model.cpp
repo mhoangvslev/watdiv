@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <regex>
 ///#include <set>
 #include <unordered_set>
 #include <sstream>
@@ -255,7 +256,7 @@ void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type){
             _range_max = boost::lexical_cast<string>(numeric_limits<unsigned short>::max());
             break;
         }
-        //case LITERAL_TYPES::COUNTRY:
+        case LITERAL_TYPES::COUNTRY:
         case LITERAL_TYPES::STRING:
         case LITERAL_TYPES::NAME:{
             _range_min = string("A");
@@ -379,9 +380,17 @@ string predicate_m_t::generate (const namespace_map & n_map){
     result.append(n_map.replace(_label));
     result.append(">");
     result.append("\t");
-    result.append("\"");
-    result.append(literal);
-    result.append("\"");
+
+    if (_literal_type == LITERAL_TYPES::COUNTRY) {
+        result.append("<");
+        result.append(literal);
+        result.append(">");
+    }
+    else {
+        result.append("\"");
+        result.append(literal);
+        result.append("\"");
+    }
 
     switch (_literal_type) {
         case LITERAL_TYPES::INTEGER:{
@@ -400,24 +409,23 @@ string predicate_m_t::generate (const namespace_map & n_map){
 
         case LITERAL_TYPES::STRING: {
             // Assign langtags randomly
-            pair<unsigned int, unsigned int> lrange = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::LANGTAGS, _range_min, _range_max);
-            int linterval = lrange.second - lrange.first - 1;
-            double lr_value = model::generate_random(_distribution_type, linterval);
-            int loffset = round(lr_value * linterval);
-            loffset = (loffset<0) ? 0 : loffset;
-            loffset = (loffset>linterval) ? linterval : loffset;
-            string langtag = *(dictionary::get_instance()->get_word(DICTIONARY_TYPES::LANGTAGS, lrange.first + loffset));
 
+            random_bucket langGen = random_bucket(9);
+            langGen.add(50, "en");
+            langGen.add(10, "ja");
+            langGen.add(5, "zh");
+            langGen.add(5, "de");
+            langGen.add(5, "fr");
+            langGen.add(5, "es");
+            langGen.add(5, "ru");
+            langGen.add(5, "kr");
+            langGen.add(5, "at");
+    
+            string langtag = langGen.get_random();
             result.append("@");
             result.append(langtag);
             break;
         }
-
-        // case LITERAL_TYPES::COUNTRY:
-        // case LITERAL_TYPES::NAME: {
-        
-        //     break;
-        // }
     }
     
     return result;
@@ -932,6 +940,9 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     string * subject_type_restriction = NULL;
     string * object_type_restriction = NULL;
 
+    // regex normal_regex = regex("normal|NORMAL\\[([0-9]+(\\.[0-9]+)),\\s*([0-9]+(\\.[0-9]+))\\]");
+    // smatch normal_match;
+
     stringstream parser(line);
     int index = 0;
     string token;
@@ -975,12 +986,19 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                 left_cover = boost::lexical_cast<float>(token);
                 break;
             }
-            case 7: {
+            case 7: {                
                 if (token.compare("uniform")==0 || token.compare("UNIFORM")==0){
                     right_distribution = DISTRIBUTION_TYPES::UNIFORM;
                 } else if (token.compare("normal")==0 || token.compare("NORMAL")==0){
                     right_distribution = DISTRIBUTION_TYPES::NORMAL;
-                } else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
+                }/*else if (regex_match(token, normal_match, normal_regex)){
+                    right_distribution = DISTRIBUTION_TYPES::NORMAL;
+                    double mean = boost::lexical_cast<double>(normal_match[1].str());
+                    double standard_deviation = boost::lexical_cast<double>(normal_match[2].str());
+                    BOOST_NORMAL_DIST = boost::normal_distribution<double>(mean, standard_deviation);
+                    static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
+
+                }*/ else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
                     right_distribution = DISTRIBUTION_TYPES::ZIPFIAN;
                 }
                 break;
@@ -1619,6 +1637,65 @@ void query_template_m_t::parse_str (const string & content){
     }
 }
 
+random_bucket::random_bucket(int size){
+    _cumulativePercentage.reserve(size);
+    _objects.reserve(size);
+    _index = 0;
+    _totalPercentage = 0;
+    _seed = 1;
+}
+
+random_bucket::random_bucket(int size, unsigned long seed){
+    _cumulativePercentage.reserve(size);
+    _objects.reserve(size);
+    _index = 0;
+    _totalPercentage = 0;
+    _seed = seed;
+}
+
+random_bucket::~random_bucket(){
+
+}
+
+void random_bucket::add(double percentage, string obj){
+    if (_index == _objects.size()){
+        cerr << "No more objects can be added into Bucket!" << "\n";
+        return;
+    }
+    else{
+        _objects[_index] = obj;
+        _cumulativePercentage[_index] = percentage;
+        _totalPercentage += percentage;
+    }
+
+    _index++;
+
+    if(_index == _objects.size())
+    {
+        double cumul=0.0;
+        for(int i=0; i < _objects.size(); i++)
+        {
+            cumul += _cumulativePercentage[i]/_totalPercentage;
+            _cumulativePercentage[i] = cumul;
+        }
+    }
+}
+
+string random_bucket::get_random(){
+
+    srand(_seed);
+    double randIndex = static_cast <double> (rand()) / static_cast <double> (RAND_MAX);
+
+    for(int i=0; i < _objects.size(); i++)
+    {
+        if(randIndex <= _cumulativePercentage[i])
+            return _objects[i];
+    }
+
+    //Should never happens, but...
+    return _objects[_objects.size()-1];
+}
+
 model::model(const char * filename){
     srand (time(NULL));
     parse(filename);
@@ -1804,13 +1881,21 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             break;
         }
         case LITERAL_TYPES::COUNTRY:{
-            pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::COUNTRY, range_min, range_max);
-            int interval = range.second - range.first - 1;
-            double r_value = model::generate_random(distribution_type, interval);
-            int offset = round(r_value * interval);
-            offset = (offset<0) ? 0 : offset;
-            offset = (offset>interval) ? interval : offset;
-            literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::COUNTRY, range.first + offset)));
+            random_bucket countryGen = random_bucket(10);
+            countryGen.add(40, "US");
+		    countryGen.add(10, "GB");
+		    countryGen.add(10, "JP");
+		    countryGen.add(10, "CN");
+		    countryGen.add(5, "DE");
+		    countryGen.add(5, "FR");
+		    countryGen.add(5, "ES");
+		    countryGen.add(5, "RU");
+		    countryGen.add(5, "KR");
+		    countryGen.add(5, "AT");
+
+            string assigned_country = countryGen.get_random();
+            literal.append("http://downlode.org/rdf/iso-3166/countries#");
+            literal.append(assigned_country);
             break;
         }
         case LITERAL_TYPES::DATE:{

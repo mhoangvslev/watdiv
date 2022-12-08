@@ -9,8 +9,6 @@ namespace DICTIONARY_TYPES {
         ENGLISH_WORDS,
         FIRST_NAMES,
         LAST_NAMES,
-        COUNTRY,
-        LANGTAGS,
         COUNT,
     };
 };
