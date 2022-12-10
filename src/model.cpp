@@ -2,6 +2,7 @@
 #include "model.h"
 #include "statistics.h"
 #include "volatility_gen.h"
+#include "truncated_normal.hpp"
 
 #include <chrono>
 #include <fstream>
@@ -33,6 +34,66 @@ static map<int,vector<double>*> zipfian_cache;
 static boost::mt19937 BOOST_RND_GEN = boost::mt19937(static_cast<unsigned> (time(0)));
 static boost::normal_distribution<double> BOOST_NORMAL_DIST = boost::normal_distribution<double>(0.5, (0.5/3.0));
 static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
+
+normal_dist_range_generator::normal_dist_range_generator(){
+    _mu = 0.0;
+    _sigma = 1.0;
+    _normal_gen_type = NORMAL_DIST_GEN_TYPES::STANDARD;
+}
+
+normal_dist_range_generator::normal_dist_range_generator(double mu, double sigma){
+    _mu = mu;
+    _sigma = sigma;
+    _normal_gen_type = NORMAL_DIST_GEN_TYPES::MS;
+}
+
+normal_dist_range_generator::normal_dist_range_generator(double mu, double sigma, double minValue, double maxValue, double normalLimit){
+    _mu = mu;
+    _sigma = sigma;
+    _min = minValue;
+    _max = maxValue;
+    _normalLimit = normalLimit;
+
+    if (maxValue == NULL) {
+        _normal_gen_type = NORMAL_DIST_GEN_TYPES::A;
+    } else if (minValue == NULL) {
+        _normal_gen_type = NORMAL_DIST_GEN_TYPES::B;
+    } else {
+        _normal_gen_type = NORMAL_DIST_GEN_TYPES::AB;
+    }
+}
+
+double normal_dist_range_generator::generate() {
+    double randVal = NULL;
+
+    switch(_normal_gen_type){
+        case NORMAL_DIST_GEN_TYPES::A :
+            randVal = truncated_normal_a_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _min);
+            break;
+        case NORMAL_DIST_GEN_TYPES::B :
+            randVal = truncated_normal_b_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _max);
+            break;
+        case NORMAL_DIST_GEN_TYPES::AB :
+            randVal = truncated_normal_ab_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _min, _max);
+            break;
+        case NORMAL_DIST_GEN_TYPES::MS :
+            randVal = normal_ms_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma);
+            break;
+        case NORMAL_DIST_GEN_TYPES::STANDARD :
+            randVal = normal_01_cdf_inv((double) rand()/ (double) RAND_MAX);
+            break;
+    }
+        
+    return randVal;
+}
+
+double normal_dist_range_generator::getValue(){
+    double randVal = normal_dist_range_generator::generate();
+    while (randVal > _normalLimit || randVal < 0){
+        randVal = normal_dist_range_generator::generate();
+    }
+    return (double) ((randVal / _normalLimit) * _max + 1);
+}
 
 ostream& operator<<(ostream& os, const DISTRIBUTION_TYPES::enum_t & distribution){
     switch (distribution){
@@ -534,12 +595,20 @@ void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned i
     if (id_cursor_map.find(_type_prefix)==id_cursor_map.end()){
         id_cursor_map[_type_prefix] = 0;
     }
+
     for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
         string subject = "";
         subject.append("<");
         subject.append(n_map.replace(_type_prefix));
         subject.append(boost::lexical_cast<string>(id));
         subject.append(">");
+
+        // Add a heritage tp: <subject> rdfs:type <type_prefix>
+        string heritage_object = "";
+        heritage_object.append("<");
+        heritage_object.append(n_map.replace(_type_prefix));
+        heritage_object.append(">");
+        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
 
         for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
             predicate_group_m_t * predicate_group = *itr2;
@@ -696,8 +765,11 @@ void association_m_t::init (string subject_type, string predicate, string object
     _object_type = object_type;
     _left_cardinality = 1;
     _right_cardinality = 1;
+
+    _left_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
     _right_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
-    _left_cover = 1.0;
+    //_left_cover = 1.0;
+    _left_distribution = DISTRIBUTION_TYPES::UNIFORM;
     _right_distribution = DISTRIBUTION_TYPES::UNIFORM;
     _subject_type_restriction = NULL;
     _object_type_restriction = NULL;
@@ -713,18 +785,20 @@ association_m_t::association_m_t (string subject_type, string predicate, string 
     _right_cardinality = right_cardinality;
 }
 
-association_m_t::association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, float left_cover){
+association_m_t::association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution){
     init (subject_type, predicate, object_type);
     _left_cardinality = left_cardinality;
     _right_cardinality = right_cardinality;
-    _left_cover = left_cover;
+    _left_distribution = left_distribution;
+    //_left_cover = left_cover;
 }
 
-association_m_t::association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, float left_cover, DISTRIBUTION_TYPES::enum_t right_distribution){
+association_m_t::association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution){
     init (subject_type, predicate, object_type);
     _left_cardinality = left_cardinality;
     _right_cardinality = right_cardinality;
-    _left_cover = left_cover;
+    //_left_cover = left_cover;
+    _left_distribution = left_distribution;
     _right_distribution = right_distribution;
 }
 
@@ -734,7 +808,8 @@ association_m_t::association_m_t (
     string object_type,
     unsigned int left_cardinality,
     unsigned int right_cardinality,
-    float left_cover,
+    // float left_cover,
+    DISTRIBUTION_TYPES::enum_t left_distribution,
     DISTRIBUTION_TYPES::enum_t right_distribution,
     const string * subject_type_restriction,
     const string * object_type_restriction){
@@ -742,7 +817,8 @@ association_m_t::association_m_t (
         _post_process = true;
         _left_cardinality = left_cardinality;
         _right_cardinality = right_cardinality;
-        _left_cover = left_cover;
+        //_left_cover = left_cover;
+        _left_distribution = left_distribution;
         _right_distribution = right_distribution;
         if (subject_type_restriction!=NULL){
             _subject_type_restriction = new string(*subject_type_restriction);
@@ -774,14 +850,17 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
         unsigned int right_instance_count = id_cursor_map.find(_object_type)->second;
         unordered_set<unsigned int> mapped_instances;
 
+        double left_distribution_pick = model::generate_random(_left_distribution, left_instance_count);
+
         boost::posix_time::ptime t1 (bpt::microsec_clock::universal_time());
 
         for (unsigned int left_id=0; left_id<left_instance_count; left_id++){
-            float pr = ((float) rand()) / ((float) RAND_MAX);
-            if (pr<=_left_cover){
+            double pr = ((double) rand()) / ((double) RAND_MAX);
+            if (pr<=left_distribution_pick){
+                //cout << "Left dist pick for generating " << n_map.replace(_subject_type) << left_id << ": " << left_distribution_pick << ", pr: " << pr << endl;
                 unsigned int right_size = _right_cardinality;
                 if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
-                    right_size = round((double) right_size * model::generate_random(_right_cardinality_distribution));
+                    right_size = round((double) right_size * model::generate_random(_right_cardinality_distribution, _right_cardinality));
                     right_size = (right_size > _right_cardinality) ? _right_cardinality : right_size;
                 }
                 for (unsigned int j=0; j<right_size; j++){
@@ -874,14 +953,17 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
         }
         if (restricted_right_instances!=NULL){
             unsigned int right_instance_count = restricted_right_instances->size();
+            double left_distribution_pick = model::generate_random(_left_distribution, left_instance_count);
+
             set<string> mapped_instances;
             for (unsigned int left_id=0; left_id<left_instance_count; left_id++){
                 string subject="";
                 subject.append(n_map.replace(_subject_type));
                 subject.append(boost::lexical_cast<string>(left_id));
                 if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.replace(*_subject_type_restriction))){
-                    float pr = ((float) rand()) / ((float) RAND_MAX);
-                    if (pr<=_left_cover){
+                    double pr = ((double) rand()) / ((double) RAND_MAX);
+                    // cout << "Left dist pick for type restricting " << subject << ": " << left_distribution_pick << ", pr: " << pr << endl;
+                    if (pr<=left_distribution_pick){
                         unsigned int right_size = _right_cardinality;
                         if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
                             right_size = round((double) right_size * model::generate_random(_right_cardinality_distribution));
@@ -934,8 +1016,10 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     string object_type ("");
     unsigned left_cardinality = 1;
     unsigned right_cardinality = 1;
+    DISTRIBUTION_TYPES::enum_t left_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
     DISTRIBUTION_TYPES::enum_t right_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
-    float left_cover = 1.0;
+    //float left_cover = 1.0;
+    DISTRIBUTION_TYPES::enum_t left_distribution = DISTRIBUTION_TYPES::UNIFORM;
     DISTRIBUTION_TYPES::enum_t right_distribution = DISTRIBUTION_TYPES::UNIFORM;
     string * subject_type_restriction = NULL;
     string * object_type_restriction = NULL;
@@ -968,6 +1052,13 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                 break;
             }
             case 4: {
+                if (token.find("[uniform]")!=string::npos || token.find("[UNIFORM]")!=string::npos){
+                    left_cardinality_distribution = DISTRIBUTION_TYPES::UNIFORM;
+                    token = token.substr(0, token.find_first_of('['));
+                } else if (token.find("[normal]")!=string::npos || token.find("[NORMAL]")!=string::npos){
+                    left_cardinality_distribution = DISTRIBUTION_TYPES::NORMAL;
+                    token = token.substr(0, token.find_first_of('['));
+                }
                 left_cardinality = boost::lexical_cast<unsigned int>(token);
                 break;
             }
@@ -983,7 +1074,22 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                 break;
             }
             case 6: {
-                left_cover = boost::lexical_cast<float>(token);
+                if (token.compare("uniform")==0 || token.compare("UNIFORM")==0){
+                    left_distribution = DISTRIBUTION_TYPES::UNIFORM;
+                } else if (token.compare("normal")==0 || token.compare("NORMAL")==0){
+                    left_distribution = DISTRIBUTION_TYPES::NORMAL;
+                }/*else if (regex_match(token, normal_match, normal_regex)){
+                    right_distribution = DISTRIBUTION_TYPES::NORMAL;
+                    double mean = boost::lexical_cast<double>(normal_match[1].str());
+                    double standard_deviation = boost::lexical_cast<double>(normal_match[2].str());
+                    BOOST_NORMAL_DIST = boost::normal_distribution<double>(mean, standard_deviation);
+                    static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
+
+                }*/ else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
+                    left_distribution = DISTRIBUTION_TYPES::ZIPFIAN;
+                } else {
+                    cerr << "<left_distribution> must be one of [uniform, normal, zipfian] " << endl;
+                }
                 break;
             }
             case 7: {                
@@ -1000,6 +1106,8 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
 
                 }*/ else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
                     right_distribution = DISTRIBUTION_TYPES::ZIPFIAN;
+                } else {
+                    cerr << "<left_distribution> must be one of [uniform, normal, zipfian] " << endl;
                 }
                 break;
             }
@@ -1032,15 +1140,17 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     } else if (index==6){
         result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality);
     } else if (index==7){
-        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_cover);
+        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_distribution);
     } else if (index==8){
-        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_cover, right_distribution);
+        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_distribution, right_distribution);
     } else if (index==10){
-        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_cover, right_distribution, subject_type_restriction, object_type_restriction);
+        result = new association_m_t (subject_type, predicate, object_type, left_cardinality, right_cardinality, left_distribution, right_distribution, subject_type_restriction, object_type_restriction);
     } else {
         cerr<<"[association_m_t::parse()]\tExpecting 3, 5, 6, 7 or 9 arguments..."<<"\n";
         exit(0);
     }
+
+    result->_left_cardinality_distribution = left_cardinality_distribution;
     result->_right_cardinality_distribution = right_cardinality_distribution;
     delete subject_type_restriction;
     delete object_type_restriction;
@@ -1641,7 +1751,7 @@ random_bucket::random_bucket(int size){
     _cumulativePercentage.reserve(size);
     _objects.reserve(size);
     _index = 0;
-    _totalPercentage = 0;
+    _totalPercentage = 0.0;
     _seed = 1;
 }
 
@@ -1649,7 +1759,7 @@ random_bucket::random_bucket(int size, unsigned long seed){
     _cumulativePercentage.reserve(size);
     _objects.reserve(size);
     _index = 0;
-    _totalPercentage = 0;
+    _totalPercentage = 0.0;
     _seed = seed;
 }
 
@@ -1658,42 +1768,41 @@ random_bucket::~random_bucket(){
 }
 
 void random_bucket::add(double percentage, string obj){
-    if (_index == _objects.size()){
+    if (_index == _objects.capacity()){
         cerr << "No more objects can be added into Bucket!" << "\n";
         return;
     }
     else{
-        _objects[_index] = obj;
-        _cumulativePercentage[_index] = percentage;
+        _objects.push_back(obj);
+        _cumulativePercentage.push_back(percentage);
         _totalPercentage += percentage;
     }
 
     _index++;
 
-    if(_index == _objects.size())
+    if(_index == _objects.capacity())
     {
         double cumul=0.0;
-        for(int i=0; i < _objects.size(); i++)
+        for(int i=0; i < _objects.capacity(); i++)
         {
-            cumul += _cumulativePercentage[i]/_totalPercentage;
-            _cumulativePercentage[i] = cumul;
+            cumul += _cumulativePercentage.at(i)/_totalPercentage;
+            _cumulativePercentage.at(i) = cumul;
         }
     }
 }
 
 string random_bucket::get_random(){
-
-    srand(_seed);
+    //srand(_seed);
     double randIndex = static_cast <double> (rand()) / static_cast <double> (RAND_MAX);
 
-    for(int i=0; i < _objects.size(); i++)
+    for(int i=0; i < _objects.capacity(); i++)
     {
-        if(randIndex <= _cumulativePercentage[i])
-            return _objects[i];
+        if(randIndex <= _cumulativePercentage.at(i))
+            return _objects.at(i);
     }
 
     //Should never happens, but...
-    return _objects[_objects.size()-1];
+    return _objects[_objects.capacity()-1];
 }
 
 model::model(const char * filename){

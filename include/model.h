@@ -178,18 +178,21 @@ struct association_m_t {
 
     unsigned int                    _left_cardinality;
     unsigned int                    _right_cardinality;
+
+    DISTRIBUTION_TYPES::enum_t      _left_cardinality_distribution;
     DISTRIBUTION_TYPES::enum_t      _right_cardinality_distribution;
 
-    float                           _left_cover;
+    //float                           _left_cover;
+    DISTRIBUTION_TYPES::enum_t      _left_distribution;
     DISTRIBUTION_TYPES::enum_t      _right_distribution;
 
     void init (string subject_type, string predicate, string object_type);
 
     association_m_t (string subject_type, string predicate, string object_type);
     association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality);
-    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, float left_cover);
-    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, float left_cover, DISTRIBUTION_TYPES::enum_t right_distribution);
-    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, float left_cover, DISTRIBUTION_TYPES::enum_t right_distribution, const string * subject_type_restriction, const string * object_type_restriction);
+    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution);
+    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution);
+    association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution, const string * subject_type_restriction, const string * object_type_restriction);
     ~association_m_t ();
 
     void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map);
@@ -324,6 +327,33 @@ struct random_bucket{
 
     void add(double percentage, string obj);
     string get_random();
+};
+
+namespace NORMAL_DIST_GEN_TYPES {
+    enum enum_t {
+        STANDARD,
+        MS,
+        AB,
+        A,
+        B
+    };
+};
+
+struct normal_dist_range_generator{
+    double _mu;
+    double _sigma;
+    double _min;
+    double _max;
+    double _normalLimit;
+    NORMAL_DIST_GEN_TYPES::enum_t _normal_gen_type;
+
+    normal_dist_range_generator();
+    normal_dist_range_generator(double mu, double sigma);
+    normal_dist_range_generator(double mu, double sigma, double minValue, double maxValue, double normalLimit);
+    ~normal_dist_range_generator();
+
+    double generate();
+    double getValue();
 };
 
 #endif // MODEL_H
