@@ -2,7 +2,6 @@
 #include "model.h"
 #include "statistics.h"
 #include "volatility_gen.h"
-#include "truncated_normal.hpp"
 
 #include <chrono>
 #include <fstream>
@@ -31,68 +30,67 @@ static int MAX_LITERAL_WORDS = 25;
 
 static map<int,vector<double>*> zipfian_cache;
 
-static boost::mt19937 BOOST_RND_GEN = boost::mt19937(static_cast<unsigned> (time(0)));
-static boost::normal_distribution<double> BOOST_NORMAL_DIST = boost::normal_distribution<double>(0.5, (0.5/3.0));
+static boost::random::mt19937 BOOST_RND_GEN(static_cast<unsigned> (time(0)));
+static boost::normal_distribution<double> BOOST_NORMAL_DIST(0.5, (0.5/3.0));
 static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
 
-normal_dist_range_generator::normal_dist_range_generator(){
-    _mu = 0.0;
-    _sigma = 1.0;
-    _normal_gen_type = NORMAL_DIST_GEN_TYPES::STANDARD;
-}
+double generate_zipfian (int item_count){
+    vector<double> * intervals = NULL;
 
-normal_dist_range_generator::normal_dist_range_generator(double mu, double sigma){
-    _mu = mu;
-    _sigma = sigma;
-    _normal_gen_type = NORMAL_DIST_GEN_TYPES::MS;
-}
-
-normal_dist_range_generator::normal_dist_range_generator(double mu, double sigma, double minValue, double maxValue, double normalLimit){
-    _mu = mu;
-    _sigma = sigma;
-    _min = minValue;
-    _max = maxValue;
-    _normalLimit = normalLimit;
-
-    if (maxValue == NULL) {
-        _normal_gen_type = NORMAL_DIST_GEN_TYPES::A;
-    } else if (minValue == NULL) {
-        _normal_gen_type = NORMAL_DIST_GEN_TYPES::B;
+    if (zipfian_cache.find(item_count)==zipfian_cache.end()){
+        intervals = new vector<double>();
+        double offset = 0.0;
+        for (int i=1; i<=item_count; i++){
+            offset += 1.0 / ((double) (i));
+            intervals->push_back(offset);
+        }
+        double scale_factor = 1.0 / offset;
+        for (int cursor=0; cursor<item_count; cursor++){
+            (*intervals)[cursor] = (*intervals)[cursor] * scale_factor;
+        }
+        zipfian_cache.insert(pair<int, vector<double>*>(item_count, intervals));
     } else {
-        _normal_gen_type = NORMAL_DIST_GEN_TYPES::AB;
+        intervals = zipfian_cache[item_count];
     }
+
+    double random_value = ((double) rand()) / ((double) RAND_MAX);
+    vector<double>::iterator pivot = lower_bound(intervals->begin(), intervals->end(), random_value);
+    double result = (pivot - intervals->begin()) * (1.0 / ((double) item_count));
+    return result;
 }
 
-double normal_dist_range_generator::generate() {
-    double randVal = NULL;
-
-    switch(_normal_gen_type){
-        case NORMAL_DIST_GEN_TYPES::A :
-            randVal = truncated_normal_a_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _min);
-            break;
-        case NORMAL_DIST_GEN_TYPES::B :
-            randVal = truncated_normal_b_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _max);
-            break;
-        case NORMAL_DIST_GEN_TYPES::AB :
-            randVal = truncated_normal_ab_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma, _min, _max);
-            break;
-        case NORMAL_DIST_GEN_TYPES::MS :
-            randVal = normal_ms_cdf_inv((double) rand()/ (double) RAND_MAX, _mu, _sigma);
-            break;
-        case NORMAL_DIST_GEN_TYPES::STANDARD :
-            randVal = normal_01_cdf_inv((double) rand()/ (double) RAND_MAX);
-            break;
+void clear_zipfian_cache (){
+    for (map<int, vector<double>*>::iterator itr=zipfian_cache.begin(); itr!=zipfian_cache.end(); itr++){
+        vector<double> * value = itr->second;
+        delete value;
+        itr->second = NULL;
     }
-        
-    return randVal;
+    zipfian_cache.clear();
 }
 
-double normal_dist_range_generator::getValue(){
-    double randVal = normal_dist_range_generator::generate();
-    while (randVal > _normalLimit || randVal < 0){
-        randVal = normal_dist_range_generator::generate();
+double generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count){
+    double result = 0.0;
+    switch (distribution_type){
+        case DISTRIBUTION_TYPES::UNIFORM:{
+            result = ((double) rand()) / ((double) RAND_MAX);
+            break;
+        }
+        case DISTRIBUTION_TYPES::NORMAL:{
+            result = BOOST_NORMAL_DIST_GEN();
+            break;
+        }
+        case DISTRIBUTION_TYPES::ZIPFIAN:{
+            result = generate_zipfian(item_count);
+            break;
+        }
+        case DISTRIBUTION_TYPES::UNDEFINED:
+        default:{
+            break;
+        }
     }
-    return (double) ((randVal / _normalLimit) * _max + 1);
+    result = (result<0.0) ? 0.0:result;
+    result = (result>1.0) ? 1.0:result;
+    return result;
 }
 
 ostream& operator<<(ostream& os, const DISTRIBUTION_TYPES::enum_t & distribution){
@@ -591,82 +589,108 @@ resource_m_t::~resource_m_t (){
     }
 }
 
+void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
+    string subject = "";
+    subject.append("<");
+    subject.append(n_map.replace(_type_prefix));
+    subject.append(boost::lexical_cast<string>(id));
+    subject.append(">");
+
+    // Add a heritage tp: <subject> rdfs:type <type_prefix>
+    string heritage_object = "";
+    heritage_object.append("<");
+    heritage_object.append(n_map.replace(_type_prefix));
+    heritage_object.append(">");
+
+    if (_predicate_group_array.size() > 0){
+        // cout << "Generate 1 #type: " << subject << endl;
+        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
+    }
+
+    for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
+        predicate_group_m_t * predicate_group = *itr2;
+        if (!predicate_group->_post_process){
+            float draw = ((float) rand())/((float)RAND_MAX);
+            if (draw<=predicate_group->_gen_probability){
+                for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
+                    predicate_m_t * predicate = *itr3;
+                    string triple_str = "";
+                    triple_str.append(subject);
+                    triple_str.append("\t");
+                    triple_str.append(predicate->generate(n_map));
+
+                    int tab1_index = triple_str.find("\t");
+                    int tab2_index = triple_str.find("\t", tab1_index+1);
+
+                    //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
+                    triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
+                    cout<<line<<" .\n";
+                }
+            }
+        }
+    }
+}
+
 void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map){
     if (id_cursor_map.find(_type_prefix)==id_cursor_map.end()){
         id_cursor_map[_type_prefix] = 0;
     }
 
-    for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
-        string subject = "";
-        subject.append("<");
-        subject.append(n_map.replace(_type_prefix));
-        subject.append(boost::lexical_cast<string>(id));
-        subject.append(">");
+    // Disabled because we only materialize resource while generating associations
+    // for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
+    //     resource_m_t::generate_once(n_map, id);
+    // }
+    id_cursor_map[_type_prefix] += _scaling_coefficient;
+}
 
-        // Add a heritage tp: <subject> rdfs:type <type_prefix>
-        string heritage_object = "";
-        heritage_object.append("<");
-        heritage_object.append(n_map.replace(_type_prefix));
-        heritage_object.append(">");
-        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
+void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, unsigned int id){
+    string subject = "";
+    subject.append("<");
+    subject.append(n_map.replace(_type_prefix));
+    subject.append(boost::lexical_cast<string>(id));
+    subject.append(">");
 
-        for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
-            predicate_group_m_t * predicate_group = *itr2;
-            if (!predicate_group->_post_process){
-                float draw = ((float) rand())/((float)RAND_MAX);
-                if (draw<=predicate_group->_gen_probability){
-                    for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
-                        predicate_m_t * predicate = *itr3;
-                        string triple_str = "";
-                        triple_str.append(subject);
-                        triple_str.append("\t");
-                        triple_str.append(predicate->generate(n_map));
+    // Add a heritage tp: <subject> rdfs:type <type_prefix>
+    string heritage_object = "";
+    heritage_object.append("<");
+    heritage_object.append(n_map.replace(_type_prefix));
+    heritage_object.append(">");
 
-                        int tab1_index = triple_str.find("\t");
-                        int tab2_index = triple_str.find("\t", tab1_index+1);
+    bool isSubjectTypeAsserted = false;
 
-                        //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
-                        triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                        cout<<line<<" .\n";
-                    }
+    for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
+        predicate_group_m_t * predicate_group = *itr2;
+        if (predicate_group->_post_process && t_map.instanceof(subject, n_map.replace(*(predicate_group->_type_restriction)))){
+            float draw = ((float) rand())/((float)RAND_MAX);
+            if (draw<=predicate_group->_gen_probability){
+                if (! isSubjectTypeAsserted){
+                    // cout << "Restrict type 1 #type: " << subject << endl;
+                    cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
+                    isSubjectTypeAsserted = true;
+                }
+                for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
+                    predicate_m_t * predicate = *itr3;
+                    string triple_str = "";                    
+                    triple_str.append(subject);
+                    triple_str.append("\t");
+                    triple_str.append(predicate->generate(n_map));
+
+                    int tab1_index = triple_str.find("\t");
+                    int tab2_index = triple_str.find("\t", tab1_index+1);
+
+                    //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
+                    triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
+                    cout<<line<<" .\n";
                 }
             }
         }
     }
-    id_cursor_map[_type_prefix] += _scaling_coefficient;
 }
 
 void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map){
     unsigned int max_count = (id_cursor_map.find(_type_prefix))->second;
     for (unsigned int id=0; id<max_count; id++){
-        string subject = "";
-        subject.append(n_map.replace(_type_prefix));
-        subject.append(boost::lexical_cast<string>(id));
-
-        for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
-            predicate_group_m_t * predicate_group = *itr2;
-            if (predicate_group->_post_process && t_map.instanceof(subject, n_map.replace(*(predicate_group->_type_restriction)))){
-                float draw = ((float) rand())/((float)RAND_MAX);
-                if (draw<=predicate_group->_gen_probability){
-                    for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
-                        predicate_m_t * predicate = *itr3;
-                        string triple_str = "";
-                        triple_str.append("<");
-                        triple_str.append(subject);
-                        triple_str.append(">");
-                        triple_str.append("\t");
-                        triple_str.append(predicate->generate(n_map));
-
-                        int tab1_index = triple_str.find("\t");
-                        int tab2_index = triple_str.find("\t", tab1_index+1);
-
-                        //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
-                        triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                        cout<<line<<" .\n";
-                    }
-                }
-            }
-        }
+        resource_m_t::process_type_restrictions_one(n_map, t_map, id);
     }
 }
 
@@ -833,7 +857,7 @@ association_m_t::~association_m_t (){
     delete _object_type_restriction;
 }
 
-void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map){
+void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -843,47 +867,73 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
         exit(0);
     }
 
-    model::clear_zipfian_cache();
+    clear_zipfian_cache();
 
     if (!_post_process){
         unsigned int left_instance_count = id_cursor_map.find(_subject_type)->second;
         unsigned int right_instance_count = id_cursor_map.find(_object_type)->second;
-        unordered_set<unsigned int> mapped_instances;
-
-        double left_distribution_pick = model::generate_random(_left_distribution, left_instance_count);
+        unordered_set<unsigned int> right_mapped_instances;
+        unordered_set<unsigned int> left_mapped_instances;
 
         boost::posix_time::ptime t1 (bpt::microsec_clock::universal_time());
 
-        for (unsigned int left_id=0; left_id<left_instance_count; left_id++){
-            double pr = ((double) rand()) / ((double) RAND_MAX);
-            if (pr<=left_distribution_pick){
-                //cout << "Left dist pick for generating " << n_map.replace(_subject_type) << left_id << ": " << left_distribution_pick << ", pr: " << pr << endl;
+        for (unsigned int i=0; i<left_instance_count; i++){
+            
+            unsigned int left_id = i;
+            bool generateCond = false;
+
+            if (_left_cover == -1.0) {
+                double l_value = generate_random(_left_distribution, left_instance_count);
+                left_id = round(l_value * left_instance_count);
+                left_id = (left_id>=left_instance_count) ? (left_instance_count-1) : left_id;
+                generateCond = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
+
+            } else {
+                double pr = ((double) rand()) / ((double) RAND_MAX);
+                generateCond = (pr<=_left_cover);
+            }
+
+            if (generateCond) {
+                left_mapped_instances.insert(left_id); 
+
                 unsigned int right_size = _right_cardinality;
                 if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
-                    right_size = round((double) right_size * model::generate_random(_right_cardinality_distribution, _right_cardinality));
+                    right_size = round((double) right_size * generate_random(_right_cardinality_distribution, _right_cardinality));
                     right_size = (right_size > _right_cardinality) ? _right_cardinality : right_size;
                 }
                 for (unsigned int j=0; j<right_size; j++){
                     unsigned int loop_counter = 0;
                     unsigned int right_id = 0;
                     do {
-                        double r_value = model::generate_random(_right_distribution, right_instance_count);
+                        double r_value = generate_random(_right_distribution, right_instance_count);
                         right_id = round(r_value * right_instance_count);
                         right_id = (right_id>=right_instance_count) ? (right_instance_count-1) : right_id;
                         loop_counter++;
-                    } while (mapped_instances.find(right_id)!=mapped_instances.end() && loop_counter<MAX_LOOP_COUNTER);
+                    } while (right_mapped_instances.find(right_id)!=right_mapped_instances.end() && loop_counter<MAX_LOOP_COUNTER);
                     if (loop_counter<MAX_LOOP_COUNTER){
                         if (_left_cardinality==1){
-                            mapped_instances.insert(right_id);
+                            right_mapped_instances.insert(right_id);
                         }
-                        string subject(""), predicate (""), object(""), triple ("");
-
+                        string subject(""), predicate (""), object(""), triple ("");                       
+                
                         // FIXME:: You need to add replace-command...
                         subject.append(n_map.replace(_subject_type));
                         subject.append(boost::lexical_cast<string>(left_id));
 
+                        // If the subject is not yet printed, print it once
+                        if (find(resource_gen_log.begin(), resource_gen_log.end(), subject) == resource_gen_log.end()) {
+                            resource_map.find(_subject_type)->second->generate_one(n_map, left_id);
+                            resource_gen_log.push_back(subject);
+                        }
+
                         object.append(n_map.replace(_object_type));
                         object.append(boost::lexical_cast<string>(right_id));
+
+                        // If the object is not yet printed, print it once
+                        if (find(resource_gen_log.begin(), resource_gen_log.end(), object) == resource_gen_log.end()) {
+                            resource_map.find(_object_type)->second->generate_one(n_map, right_id);
+                           resource_gen_log.push_back(object);
+                        }
 
                         predicate.append(n_map.replace(_predicate));
 
@@ -926,7 +976,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
     }
 }
 
-void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map){
+void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -953,35 +1003,59 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
         }
         if (restricted_right_instances!=NULL){
             unsigned int right_instance_count = restricted_right_instances->size();
-            double left_distribution_pick = model::generate_random(_left_distribution, left_instance_count);
 
-            set<string> mapped_instances;
-            for (unsigned int left_id=0; left_id<left_instance_count; left_id++){
+            set<string> right_mapped_instances;
+            set<unsigned int> left_mapped_instances;
+
+            for (unsigned int i=0; i<left_instance_count; i++){
+
                 string subject="";
                 subject.append(n_map.replace(_subject_type));
-                subject.append(boost::lexical_cast<string>(left_id));
-                if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.replace(*_subject_type_restriction))){
+                subject.append(boost::lexical_cast<string>(i));
+
+                unsigned int left_id = i;
+                bool generateCond = false;
+
+                if (_left_cover == -1.0) {
+                    double l_value = generate_random(_left_distribution, left_instance_count);
+                    left_id = round(l_value * left_instance_count);
+                    left_id = (left_id>=left_instance_count) ? (left_instance_count-1) : left_id;
+                    generateCond = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
+
+                    if (generateCond) { 
+                        left_mapped_instances.insert(left_id); 
+                    } 
+
+                } else {
                     double pr = ((double) rand()) / ((double) RAND_MAX);
-                    // cout << "Left dist pick for type restricting " << subject << ": " << left_distribution_pick << ", pr: " << pr << endl;
-                    if (pr<=left_distribution_pick){
+                    generateCond = (pr<=_left_cover);
+                }
+
+                if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.replace(*_subject_type_restriction))){
+                                        
+                    if ( generateCond ){
+
+                        left_mapped_instances.insert(left_id);
+
                         unsigned int right_size = _right_cardinality;
                         if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
-                            right_size = round((double) right_size * model::generate_random(_right_cardinality_distribution));
+                            right_size = round((double) right_size * generate_random(_right_cardinality_distribution, _right_cardinality));
                             right_size = (right_size > _right_cardinality) ? _right_cardinality : right_size;
                         }
                         for (unsigned int j=0; j<right_size; j++){
                             string predicate="", object="", triple="";
-                            unsigned int loop_counter = 0;
+                            unsigned int right_loop_counter = 0;
+                            unsigned int right_index = 0;
                             do {
-                                double r_value = model::generate_random(_right_distribution, right_instance_count);
-                                unsigned int right_index = round(r_value * right_instance_count);
+                                double r_value = generate_random(_right_distribution, right_instance_count);
+                                right_index = round(r_value * right_instance_count);
                                 right_index = (right_index>=right_instance_count) ? (right_instance_count-1) : right_index;
                                 object = (*restricted_right_instances)[right_index];
-                                loop_counter++;
-                            } while (mapped_instances.find(object)!=mapped_instances.end() && loop_counter<MAX_LOOP_COUNTER);
-                            if (loop_counter<MAX_LOOP_COUNTER){
+                                right_loop_counter++;
+                            } while (right_mapped_instances.find(object)!=right_mapped_instances.end() && right_loop_counter<MAX_LOOP_COUNTER);
+                            if (right_loop_counter<MAX_LOOP_COUNTER){
                                 if (_left_cardinality==1){
-                                    mapped_instances.insert(object);
+                                    right_mapped_instances.insert(object);
                                 }
 
                                 predicate.append(n_map.replace(_predicate));
@@ -990,12 +1064,26 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 subject_str.append("<");
                                 subject_str.append(subject);
                                 subject_str.append(">");
+
+                                // If the object is not yet printed, print it once
+                                if (find(resource_gen_log.begin(), resource_gen_log.end(), subject) == resource_gen_log.end()){
+                                    resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id);
+                                    resource_gen_log.push_back(subject);
+                                }
+
                                 predicate_str.append("<");
                                 predicate_str.append(predicate);
                                 predicate_str.append(">");
+
                                 object_str.append("<");
                                 object_str.append(object);
                                 object_str.append(">");
+                                
+                                // If the object is not yet printed, print it once
+                                if (find(resource_gen_log.begin(), resource_gen_log.end(), object) == resource_gen_log.end()) {
+                                    resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index);
+                                    resource_gen_log.push_back(object);
+                                }
 
                                 //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
                                 triple_st line (subject_str, predicate_str, object_str);
@@ -1018,7 +1106,7 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     unsigned right_cardinality = 1;
     DISTRIBUTION_TYPES::enum_t left_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
     DISTRIBUTION_TYPES::enum_t right_cardinality_distribution = DISTRIBUTION_TYPES::UNDEFINED;
-    //float left_cover = 1.0;
+    double left_cover = -1.0;
     DISTRIBUTION_TYPES::enum_t left_distribution = DISTRIBUTION_TYPES::UNIFORM;
     DISTRIBUTION_TYPES::enum_t right_distribution = DISTRIBUTION_TYPES::UNIFORM;
     string * subject_type_restriction = NULL;
@@ -1078,17 +1166,12 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                     left_distribution = DISTRIBUTION_TYPES::UNIFORM;
                 } else if (token.compare("normal")==0 || token.compare("NORMAL")==0){
                     left_distribution = DISTRIBUTION_TYPES::NORMAL;
-                }/*else if (regex_match(token, normal_match, normal_regex)){
-                    right_distribution = DISTRIBUTION_TYPES::NORMAL;
-                    double mean = boost::lexical_cast<double>(normal_match[1].str());
-                    double standard_deviation = boost::lexical_cast<double>(normal_match[2].str());
-                    BOOST_NORMAL_DIST = boost::normal_distribution<double>(mean, standard_deviation);
-                    static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
-
-                }*/ else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
+                } else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
                     left_distribution = DISTRIBUTION_TYPES::ZIPFIAN;
+                } else if (regex_match(token, regex("[0-9]+(\\.[0-9]+)*"))) {
+                    left_cover = boost::lexical_cast<double>(token);
                 } else {
-                    cerr << "<left_distribution> must be one of [uniform, normal, zipfian] " << endl;
+                    cerr << "<left_distribution> must be one of [uniform, normal, zipfian, constant] " << endl;
                 }
                 break;
             }
@@ -1097,15 +1180,10 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                     right_distribution = DISTRIBUTION_TYPES::UNIFORM;
                 } else if (token.compare("normal")==0 || token.compare("NORMAL")==0){
                     right_distribution = DISTRIBUTION_TYPES::NORMAL;
-                }/*else if (regex_match(token, normal_match, normal_regex)){
-                    right_distribution = DISTRIBUTION_TYPES::NORMAL;
-                    double mean = boost::lexical_cast<double>(normal_match[1].str());
-                    double standard_deviation = boost::lexical_cast<double>(normal_match[2].str());
-                    BOOST_NORMAL_DIST = boost::normal_distribution<double>(mean, standard_deviation);
-                    static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
-
-                }*/ else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
+                } else if (token.compare("zipfian")==0 || token.compare("ZIPFIAN")==0){
                     right_distribution = DISTRIBUTION_TYPES::ZIPFIAN;
+                } else if (regex_match(token, regex("[0-9]+(\\.[0-9]+)*"))) {
+                    left_cover = boost::lexical_cast<double>(token);
                 } else {
                     cerr << "<left_distribution> must be one of [uniform, normal, zipfian] " << endl;
                 }
@@ -1152,6 +1230,7 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
 
     result->_left_cardinality_distribution = left_cardinality_distribution;
     result->_right_cardinality_distribution = right_cardinality_distribution;
+    result->_left_cover = left_cover;
     delete subject_type_restriction;
     delete object_type_restriction;
     return result;
@@ -1293,7 +1372,7 @@ string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_te
                 }
                 id = v_gen->next_rand_index();
             } else {
-                double r_value = model::generate_random(_distribution_type, instance_count);
+                double r_value = generate_random(_distribution_type, instance_count);
                 id = round(r_value * instance_count);
             }
 
@@ -1334,7 +1413,7 @@ string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_te
 
                 index = v_gen->next_rand_index();
             } else {
-                double r_value = model::generate_random(_distribution_type, instance_count);
+                double r_value = generate_random(_distribution_type, instance_count);
                 index = round(r_value * instance_count);
             }
 
@@ -1792,7 +1871,6 @@ void random_bucket::add(double percentage, string obj){
 }
 
 string random_bucket::get_random(){
-    //srand(_seed);
     double randIndex = static_cast <double> (rand()) / static_cast <double> (RAND_MAX);
 
     for(int i=0; i < _objects.capacity(); i++)
@@ -1835,7 +1913,7 @@ void model::generate (int scale_factor){
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->generate(_namespace_map, _type_map, _id_cursor_map);
+        association->generate(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
     }
 
     boost::posix_time::ptime t3 (bpt::microsec_clock::universal_time());
@@ -1849,7 +1927,7 @@ void model::generate (int scale_factor){
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map);
+        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
     }
 
     boost::posix_time::ptime t5 (bpt::microsec_clock::universal_time());
@@ -1927,7 +2005,9 @@ void model::parse (const char * filename){
     }
     fis.close();
     while (!object_stack.empty()){
-        _resource_array.push_back((resource_m_t *) object_stack.top().second);
+        resource_m_t* resource = (resource_m_t *) object_stack.top().second;
+        _resource_array.push_back(resource);
+        _resource_map.insert(pair<string, resource_m_t*>(resource->_type_prefix, resource));
         object_stack.pop();
     }
 }
@@ -1939,7 +2019,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             int min_value = boost::lexical_cast<int>(range_min);
             int max_value = boost::lexical_cast<int>(range_max);
             int interval = max_value - min_value;
-            double r_value = model::generate_random(distribution_type, interval);
+            double r_value = generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1950,7 +2030,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             double min_value = boost::lexical_cast<double>(range_min);
             double max_value = boost::lexical_cast<double>(range_max);
             double interval = max_value - min_value;
-            double r_value = model::generate_random(distribution_type, interval);
+            double r_value = generate_random(distribution_type, interval);
             double offset = r_value * interval;
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1965,7 +2045,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         case LITERAL_TYPES::STRING:{
             pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::ENGLISH_WORDS, range_min, range_max);
             int interval = range.second - range.first - 1;
-            double r_value = model::generate_random(distribution_type, interval);
+            double r_value = generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -1982,7 +2062,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         case LITERAL_TYPES::NAME:{
             pair<unsigned int, unsigned int> range = dictionary::get_instance()->get_interval(DICTIONARY_TYPES::FIRST_NAMES, range_min, range_max);
             int interval = range.second - range.first - 1;
-            double r_value = model::generate_random(distribution_type, interval);
+            double r_value = generate_random(distribution_type, interval);
             int offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -2018,7 +2098,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             max_iss>>max_time;
             boost::posix_time::time_duration range (max_time - min_time);
             long interval = range.total_seconds();
-            double r_value = model::generate_random(distribution_type, interval);
+            double r_value = generate_random(distribution_type, interval);
             long offset = round(r_value * interval);
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
@@ -2029,65 +2109,6 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         }
     }
     return literal;
-}
-
-double model::generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count){
-    double result = 0.0;
-    switch (distribution_type){
-        case DISTRIBUTION_TYPES::UNIFORM:{
-            result = ((double) rand()) / ((double) RAND_MAX);
-            break;
-        }
-        case DISTRIBUTION_TYPES::NORMAL:{
-            result = BOOST_NORMAL_DIST_GEN();
-            break;
-        }
-        case DISTRIBUTION_TYPES::ZIPFIAN:{
-            result = generate_zipfian(item_count);
-            break;
-        }
-        case DISTRIBUTION_TYPES::UNDEFINED:
-        default:{
-            break;
-        }
-    }
-    result = (result<0.0) ? 0.0:result;
-    result = (result>1.0) ? 1.0:result;
-    return result;
-}
-
-double model::generate_zipfian (int item_count){
-    vector<double> * intervals = NULL;
-
-    if (zipfian_cache.find(item_count)==zipfian_cache.end()){
-        intervals = new vector<double>();
-        double offset = 0.0;
-        for (int i=1; i<=item_count; i++){
-            offset += 1.0 / ((double) (i));
-            intervals->push_back(offset);
-        }
-        double scale_factor = 1.0 / offset;
-        for (int cursor=0; cursor<item_count; cursor++){
-            (*intervals)[cursor] = (*intervals)[cursor] * scale_factor;
-        }
-        zipfian_cache.insert(pair<int, vector<double>*>(item_count, intervals));
-    } else {
-        intervals = zipfian_cache[item_count];
-    }
-
-    double random_value = ((double) rand()) / ((double) RAND_MAX);
-    vector<double>::iterator pivot = lower_bound(intervals->begin(), intervals->end(), random_value);
-    double result = (pivot - intervals->begin()) * (1.0 / ((double) item_count));
-    return result;
-}
-
-void model::clear_zipfian_cache (){
-    for (map<int, vector<double>*>::iterator itr=zipfian_cache.begin(); itr!=zipfian_cache.end(); itr++){
-        vector<double> * value = itr->second;
-        delete value;
-        itr->second = NULL;
-    }
-    zipfian_cache.clear();
 }
 
 void statistics_m_t::init (const model * mdl, const string & predicate, const string & subject_type, const string & object_type){

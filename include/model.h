@@ -161,7 +161,9 @@ struct resource_m_t {
     ~resource_m_t ();
 
     void generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map);
+    void generate_one (const namespace_map & n_map, const unsigned int id);
     void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map);
+    void process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, const unsigned int id);
 
     static resource_m_t * parse (const string & line);
 };
@@ -182,7 +184,7 @@ struct association_m_t {
     DISTRIBUTION_TYPES::enum_t      _left_cardinality_distribution;
     DISTRIBUTION_TYPES::enum_t      _right_cardinality_distribution;
 
-    //float                           _left_cover;
+    double                          _left_cover;
     DISTRIBUTION_TYPES::enum_t      _left_distribution;
     DISTRIBUTION_TYPES::enum_t      _right_distribution;
 
@@ -195,8 +197,8 @@ struct association_m_t {
     association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution, const string * subject_type_restriction, const string * object_type_restriction);
     ~association_m_t ();
 
-    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map);
-    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map);
+    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log);
+    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log);
 
     static association_m_t * parse (const map<string, unsigned int> & id_cursor_map, const string & line);
 };
@@ -289,8 +291,25 @@ struct statistics_m_t {
     static statistics_m_t * parse (const model * mdl, const string & line);
 };
 
+struct random_bucket{
+    vector<double> _cumulativePercentage;
+    vector<string> _objects;
+    int _index;
+	double _totalPercentage;
+    unsigned long _seed;
+
+    random_bucket(int size);
+    random_bucket(int size, unsigned long seed);
+    ~random_bucket();
+
+    void add(double percentage, string obj);
+    string get_random();
+};
+
 struct model{
     vector<resource_m_t*>       _resource_array;
+    map<string, resource_m_t*>  _resource_map;
+    vector<string>              _resource_gen_log;
     vector<association_m_t*>    _association_array;
     vector<string>              _statistics_lines;
     map<string, unsigned int>   _id_cursor_map;
@@ -309,24 +328,9 @@ struct model{
     void save (const char * filename) const;
 
     static string generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const string & range_min, const string & range_max);
-    static double generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count=-1);
-    static double generate_zipfian (int item_count);
-    static void clear_zipfian_cache ();
-};
-
-struct random_bucket{
-    vector<double> _cumulativePercentage;
-    vector<string> _objects;
-    int _index;
-	double _totalPercentage;
-    unsigned long _seed;
-
-    random_bucket(int size);
-    random_bucket(int size, unsigned long seed);
-    ~random_bucket();
-
-    void add(double percentage, string obj);
-    string get_random();
+    // static double generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count=-1);
+    // static double generate_zipfian (int item_count);
+    // static void clear_zipfian_cache ();
 };
 
 namespace NORMAL_DIST_GEN_TYPES {
