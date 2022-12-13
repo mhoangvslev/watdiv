@@ -638,7 +638,7 @@ void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned i
 
     // Disabled because we only materialize resource while generating associations
     // for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
-    //     resource_m_t::generate_once(n_map, id);
+    //     resource_m_t::generate_one(n_map, id);
     // }
     id_cursor_map[_type_prefix] += _scaling_coefficient;
 }
@@ -880,36 +880,68 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
         for (unsigned int i=0; i<left_instance_count; i++){
             
             unsigned int left_id = i;
-            bool generateCond = false;
+            bool generateCondIndp = false;
+            bool generateCondExist = false;
 
             if (_left_cover == -1.0) {
                 double l_value = generate_random(_left_distribution, left_instance_count);
                 left_id = round(l_value * left_instance_count);
                 left_id = (left_id>=left_instance_count) ? (left_instance_count-1) : left_id;
-                generateCond = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
+                generateCondIndp = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
 
             } else {
                 double pr = ((double) rand()) / ((double) RAND_MAX);
-                generateCond = (pr<=_left_cover);
+                generateCondIndp = (pr<=_left_cover);
             }
+
+            string candidateSubject = "";
+            candidateSubject.append(n_map.replace(_subject_type));
+            candidateSubject.append(boost::lexical_cast<string>(left_id));
+            generateCondExist = find(resource_gen_log.begin(), resource_gen_log.end(), candidateSubject) != resource_gen_log.end();
+
+            bool generateCond = false;
+            switch(_association_constraint){
+                case ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT: {
+                    generateCond = generateCondIndp;
+                    break;
+                }
+
+                case ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY: {
+                    generateCond = generateCondExist;
+                    break;
+                }
+
+                case ASSOCIATION_CONSTRAIN_TYPES::PARTIAL: {
+                    generateCond = generateCondIndp || generateCondExist;
+                    break;
+                }
+
+                case ASSOCIATION_CONSTRAIN_TYPES::FULL: {
+                    generateCond = generateCondIndp && generateCondExist;
+                    break;
+                }
+            }
+            
 
             if (generateCond) {
                 left_mapped_instances.insert(left_id); 
 
                 unsigned int right_size = _right_cardinality;
-                if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
+                if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED && right_size > 1){
                     right_size = round((double) right_size * generate_random(_right_cardinality_distribution, _right_cardinality));
                     right_size = (right_size > _right_cardinality) ? _right_cardinality : right_size;
                 }
                 for (unsigned int j=0; j<right_size; j++){
                     unsigned int loop_counter = 0;
                     unsigned int right_id = 0;
+
                     do {
                         double r_value = generate_random(_right_distribution, right_instance_count);
                         right_id = round(r_value * right_instance_count);
                         right_id = (right_id>=right_instance_count) ? (right_instance_count-1) : right_id;
                         loop_counter++;
                     } while (right_mapped_instances.find(right_id)!=right_mapped_instances.end() && loop_counter<MAX_LOOP_COUNTER);
+
                     if (loop_counter<MAX_LOOP_COUNTER){
                         if (_left_cardinality==1){
                             right_mapped_instances.insert(right_id);
@@ -1009,26 +1041,48 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
 
             for (unsigned int i=0; i<left_instance_count; i++){
 
-                string subject="";
-                subject.append(n_map.replace(_subject_type));
-                subject.append(boost::lexical_cast<string>(i));
-
                 unsigned int left_id = i;
-                bool generateCond = false;
+                bool generateCondIndp = false;
+                bool generateCondExist = false;
 
                 if (_left_cover == -1.0) {
                     double l_value = generate_random(_left_distribution, left_instance_count);
                     left_id = round(l_value * left_instance_count);
                     left_id = (left_id>=left_instance_count) ? (left_instance_count-1) : left_id;
-                    generateCond = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
-
-                    if (generateCond) { 
-                        left_mapped_instances.insert(left_id); 
-                    } 
+                    generateCondIndp = (left_mapped_instances.find(left_id) == left_mapped_instances.end());
 
                 } else {
                     double pr = ((double) rand()) / ((double) RAND_MAX);
-                    generateCond = (pr<=_left_cover);
+                    generateCondIndp = (pr<=_left_cover);
+                }
+
+                string subject="";
+                subject.append(n_map.replace(_subject_type));
+                subject.append(boost::lexical_cast<string>(left_id));
+
+                generateCondExist = find(resource_gen_log.begin(), resource_gen_log.end(), subject) != resource_gen_log.end();
+
+                bool generateCond = false;
+                switch(_association_constraint){
+                    case ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT: {
+                        generateCond = generateCondIndp;
+                        break;
+                    }
+
+                    case ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY: {
+                        generateCond = generateCondExist;
+                        break;
+                    }
+
+                    case ASSOCIATION_CONSTRAIN_TYPES::PARTIAL: {
+                        generateCond = generateCondIndp || generateCondExist;
+                        break;
+                    }
+
+                    case ASSOCIATION_CONSTRAIN_TYPES::FULL: {
+                        generateCond = generateCondIndp && generateCondExist;
+                        break;
+                    }
                 }
 
                 if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.replace(*_subject_type_restriction))){
@@ -1038,7 +1092,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                         left_mapped_instances.insert(left_id);
 
                         unsigned int right_size = _right_cardinality;
-                        if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED){
+                        if (_right_cardinality_distribution!=DISTRIBUTION_TYPES::UNDEFINED && right_size > 1){
                             right_size = round((double) right_size * generate_random(_right_cardinality_distribution, _right_cardinality));
                             right_size = (right_size > _right_cardinality) ? _right_cardinality : right_size;
                         }
@@ -1046,6 +1100,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                             string predicate="", object="", triple="";
                             unsigned int right_loop_counter = 0;
                             unsigned int right_index = 0;
+
                             do {
                                 double r_value = generate_random(_right_distribution, right_instance_count);
                                 right_index = round(r_value * right_instance_count);
@@ -1053,6 +1108,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 object = (*restricted_right_instances)[right_index];
                                 right_loop_counter++;
                             } while (right_mapped_instances.find(object)!=right_mapped_instances.end() && right_loop_counter<MAX_LOOP_COUNTER);
+
                             if (right_loop_counter<MAX_LOOP_COUNTER){
                                 if (_left_cardinality==1){
                                     right_mapped_instances.insert(object);
@@ -1111,6 +1167,7 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     DISTRIBUTION_TYPES::enum_t right_distribution = DISTRIBUTION_TYPES::UNIFORM;
     string * subject_type_restriction = NULL;
     string * object_type_restriction = NULL;
+    ASSOCIATION_CONSTRAIN_TYPES::enum_t association_constraint = ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT;
 
     // regex normal_regex = regex("normal|NORMAL\\[([0-9]+(\\.[0-9]+)),\\s*([0-9]+(\\.[0-9]+))\\]");
     // smatch normal_match;
@@ -1121,9 +1178,15 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     while (parser>>token){
         switch (index){
             case 0: {
-                if (token.compare("#association")!=0){
+                if (token.compare("#association")!=0 && token.compare("#association1")!=0 && token.compare("#association2")!=0 && token.compare("#association3")!=0){
                     cerr<<"[association_m_t::parse()]\tExpecting #association..."<<"\n";
                     exit(0);
+                } else if (token.compare("#association1")==0){
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY;
+                } else if (token.compare("#association2")==0){
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::PARTIAL;
+                } else if (token.compare("#association3")==0){
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::FULL;
                 }
                 break;
             }
@@ -1231,6 +1294,7 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     result->_left_cardinality_distribution = left_cardinality_distribution;
     result->_right_cardinality_distribution = right_cardinality_distribution;
     result->_left_cover = left_cover;
+    result->_association_constraint = association_constraint;
     delete subject_type_restriction;
     delete object_type_restriction;
     return result;
