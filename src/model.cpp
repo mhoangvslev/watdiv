@@ -34,6 +34,16 @@ static boost::random::mt19937 BOOST_RND_GEN(static_cast<unsigned> (time(0)));
 static boost::normal_distribution<double> BOOST_NORMAL_DIST(0.5, (0.5/3.0));
 static boost::variate_generator<boost::mt19937, boost::normal_distribution<double> > BOOST_NORMAL_DIST_GEN (BOOST_RND_GEN, BOOST_NORMAL_DIST);
 
+static vector<string> countries {"US", "UK", "JP", "CN", "DE", "FR", "ES", "RU", "KR", "AT"};
+static vector<double> countries_weight {40, 10, 10, 10, 5, 5, 5, 5, 5, 5};
+static boost::random::discrete_distribution<int> BOOST_COUNTRY_DIST(countries_weight);
+static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> BOOST_COUNTRY_DIST_GEN(BOOST_RND_GEN, BOOST_COUNTRY_DIST);
+
+static vector<string> langtags {"en", "ja", "zh", "de", "fr", "es", "ru", "kr", "at"};
+static vector<double> langtags_weight {50, 10, 10, 5, 5, 5, 5, 5, 5};
+static boost::random::discrete_distribution<int> BOOST_LANGTAG_DIST(langtags_weight);
+static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> BOOST_LANGTAG_DIST_GEN(BOOST_RND_GEN, BOOST_LANGTAG_DIST);
+
 double generate_zipfian (int item_count){
     vector<double> * intervals = NULL;
 
@@ -467,20 +477,7 @@ string predicate_m_t::generate (const namespace_map & n_map){
         }
 
         case LITERAL_TYPES::STRING: {
-            // Assign langtags randomly
-
-            random_bucket langGen = random_bucket(9);
-            langGen.add(50, "en");
-            langGen.add(10, "ja");
-            langGen.add(5, "zh");
-            langGen.add(5, "de");
-            langGen.add(5, "fr");
-            langGen.add(5, "es");
-            langGen.add(5, "ru");
-            langGen.add(5, "kr");
-            langGen.add(5, "at");
-    
-            string langtag = langGen.get_random();
+            string langtag = langtags.at(BOOST_LANGTAG_DIST_GEN());
             result.append("@");
             result.append(langtag);
             break;
@@ -1890,63 +1887,6 @@ void query_template_m_t::parse_str (const string & content){
     }
 }
 
-random_bucket::random_bucket(int size){
-    _cumulativePercentage.reserve(size);
-    _objects.reserve(size);
-    _index = 0;
-    _totalPercentage = 0.0;
-    _seed = 1;
-}
-
-random_bucket::random_bucket(int size, unsigned long seed){
-    _cumulativePercentage.reserve(size);
-    _objects.reserve(size);
-    _index = 0;
-    _totalPercentage = 0.0;
-    _seed = seed;
-}
-
-random_bucket::~random_bucket(){
-
-}
-
-void random_bucket::add(double percentage, string obj){
-    if (_index == _objects.capacity()){
-        cerr << "No more objects can be added into Bucket!" << "\n";
-        return;
-    }
-    else{
-        _objects.push_back(obj);
-        _cumulativePercentage.push_back(percentage);
-        _totalPercentage += percentage;
-    }
-
-    _index++;
-
-    if(_index == _objects.capacity())
-    {
-        double cumul=0.0;
-        for(int i=0; i < _objects.capacity(); i++)
-        {
-            cumul += _cumulativePercentage.at(i)/_totalPercentage;
-            _cumulativePercentage.at(i) = cumul;
-        }
-    }
-}
-
-string random_bucket::get_random(){
-    double randIndex = static_cast <double> (rand()) / static_cast <double> (RAND_MAX);
-
-    for(int i=0; i < _objects.capacity(); i++)
-    {
-        if(randIndex <= _cumulativePercentage.at(i))
-            return _objects.at(i);
-    }
-
-    //Should never happens, but...
-    return _objects[_objects.capacity()-1];
-}
-
 model::model(const char * filename){
     srand (time(NULL));
     parse(filename);
@@ -2134,19 +2074,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             break;
         }
         case LITERAL_TYPES::COUNTRY:{
-            random_bucket countryGen = random_bucket(10);
-            countryGen.add(40, "US");
-		    countryGen.add(10, "GB");
-		    countryGen.add(10, "JP");
-		    countryGen.add(10, "CN");
-		    countryGen.add(5, "DE");
-		    countryGen.add(5, "FR");
-		    countryGen.add(5, "ES");
-		    countryGen.add(5, "RU");
-		    countryGen.add(5, "KR");
-		    countryGen.add(5, "AT");
-
-            string assigned_country = countryGen.get_random();
+            string assigned_country = countries.at(BOOST_COUNTRY_DIST_GEN());
             literal.append("http://downlode.org/rdf/iso-3166/countries#");
             literal.append(assigned_country);
             break;
@@ -2507,6 +2435,42 @@ void model::save (const char * filename) const{
 
     fos.close();
 }
+
+/* int main(int argc, const char* argv[]) {
+    
+    unsigned int nrolls = boost::lexical_cast<unsigned int>(argv[1]);
+    map<string, unsigned int> countries_stats;
+    map<string, unsigned int> langtags_stats;
+
+    for (int i = 0; i < nrolls; i++){
+        string country = countries.at(BOOST_COUNTRY_DIST_GEN());
+
+        map<string, unsigned int>::iterator country_stat = countries_stats.find(country);
+        if (country_stat == countries_stats.end()){
+            countries_stats.insert(pair<string, unsigned int>(country, 0));
+        } else {
+            ++country_stat->second;
+        }
+
+        string langtag = langtags.at(BOOST_LANGTAG_DIST_GEN());
+        map<string, unsigned int>::iterator langtag_stat = langtags_stats.find(langtag);
+        if (langtag_stat == langtags_stats.end()){
+            langtags_stats.insert(pair<string, unsigned int>(langtag, 0));
+        } else {
+            ++langtag_stat->second;
+        }
+    }
+
+    cout << "Countries" << endl;
+    for (map<string, unsigned int>::const_iterator itr = countries_stats.cbegin(); itr != countries_stats.cend(); itr++) {
+        cout << "\t" << itr->first << ": " << (double) itr->second / (double) nrolls << endl;
+    }
+
+    cout << "Langtags" << endl;
+    for (map<string, unsigned int>::const_iterator itr = langtags_stats.cbegin(); itr != langtags_stats.cend(); itr++) {
+        cout << "\t" << itr->first << ": " << (double) itr->second / (double) nrolls << endl;
+    }
+}*/
 
 int main(int argc, const char* argv[]) {
     dictionary * dict = dictionary::get_instance();

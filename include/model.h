@@ -301,22 +301,6 @@ struct statistics_m_t {
 
     static statistics_m_t * parse (const model * mdl, const string & line);
 };
-
-struct random_bucket{
-    vector<double> _cumulativePercentage;
-    vector<string> _objects;
-    int _index;
-	double _totalPercentage;
-    unsigned long _seed;
-
-    random_bucket(int size);
-    random_bucket(int size, unsigned long seed);
-    ~random_bucket();
-
-    void add(double percentage, string obj);
-    string get_random();
-};
-
 struct model{
     vector<resource_m_t*>       _resource_array;
     map<string, resource_m_t*>  _resource_map;
