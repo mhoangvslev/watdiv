@@ -7,6 +7,7 @@ RUN apt update && apt install -y --no-install-recommends \
         wamerican \
         build-essential \
         python3 \
+        libomp-dev \
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY . /opt/watdiv/

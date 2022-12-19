@@ -604,6 +604,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
         cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
     }
 
+    #pragma omp parallel for
     for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
         predicate_group_m_t * predicate_group = *itr2;
         if (!predicate_group->_post_process){
@@ -655,6 +656,7 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
 
     bool isSubjectTypeAsserted = false;
 
+    #pragma omp parallel for
     for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
         predicate_group_m_t * predicate_group = *itr2;
         if (predicate_group->_post_process && t_map.instanceof(subject, n_map.replace(*(predicate_group->_type_restriction)))){
@@ -686,6 +688,7 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
 
 void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map){
     unsigned int max_count = (id_cursor_map.find(_type_prefix))->second;
+    #pragma omp parallel for
     for (unsigned int id=0; id<max_count; id++){
         resource_m_t::process_type_restrictions_one(n_map, t_map, id);
     }
@@ -1904,6 +1907,7 @@ model::~model(){
 void model::generate (int scale_factor){
     boost::posix_time::ptime t1 (bpt::microsec_clock::universal_time());
 
+    #pragma omp parallel for
     for (int i=0; i<scale_factor; i++){
         for (vector<resource_m_t*>::iterator itr2=_resource_array.begin(); itr2!=_resource_array.end(); itr2++){
             resource_m_t * resource = *itr2;

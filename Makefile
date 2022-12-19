@@ -12,11 +12,11 @@ LD = g++
 WINDRES = windres
 
 INC =  -Iinclude -I$(BOOST_HOME)/include
-CFLAGS = -std=c++0x -Wall
+CFLAGS = -std=c++0x -Wall -fopenmp
 RESINC = 
 LIBDIR =  -L$(BOOST_HOME)/lib
 #LIB =  $(BOOST_HOME)/lib/libboost_date_time.a
-LIB = -lboost_date_time
+LIB = -lboost_date_time -lgomp
 LDFLAGS = 
 
 INC_DEBUG =  $(INC)
