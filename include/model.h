@@ -208,8 +208,8 @@ struct association_m_t {
     association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution, const string * subject_type_restriction, const string * object_type_restriction);
     ~association_m_t ();
 
-    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log);
-    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log);
+    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log);
+    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log);
 
     static association_m_t * parse (const map<string, unsigned int> & id_cursor_map, const string & line);
 };
@@ -304,7 +304,7 @@ struct statistics_m_t {
 struct model{
     vector<resource_m_t*>       _resource_array;
     map<string, resource_m_t*>  _resource_map;
-    vector<string>              _resource_gen_log;
+    set<string>                 _resource_gen_log;
     vector<association_m_t*>    _association_array;
     vector<string>              _statistics_lines;
     map<string, unsigned int>   _id_cursor_map;

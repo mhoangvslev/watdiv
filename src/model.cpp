@@ -601,7 +601,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
 
     if (_predicate_group_array.size() > 0){
         // cout << "Generate 1 #type: " << subject << endl;
-        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
+        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
     }
 
     for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
@@ -621,7 +621,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
 
                     //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
                     triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                    cout<<line<<" .\n";
+                    cout << line << " ." << endl;
                 }
             }
         }
@@ -634,9 +634,9 @@ void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned i
     }
 
     // Disabled because we only materialize resource while generating associations
-    // for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
-    //     resource_m_t::generate_one(n_map, id);
-    // }
+    for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
+        resource_m_t::generate_one(n_map, id);
+    }
     id_cursor_map[_type_prefix] += _scaling_coefficient;
 }
 
@@ -677,7 +677,7 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
 
                     //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
                     triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                    cout<<line<<" .\n";
+                    cout << line << " ." << endl;
                 }
             }
         }
@@ -854,7 +854,7 @@ association_m_t::~association_m_t (){
     delete _object_type_restriction;
 }
 
-void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log){
+void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -894,7 +894,9 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
             string candidateSubject = "";
             candidateSubject.append(n_map.replace(_subject_type));
             candidateSubject.append(boost::lexical_cast<string>(left_id));
-            generateCondExist = find(resource_gen_log.begin(), resource_gen_log.end(), candidateSubject) != resource_gen_log.end();
+            generateCondExist = (resource_gen_log.find(candidateSubject) != resource_gen_log.end());
+
+            bool generateCond = generateCondIndp;
 
             bool generateCond = false;
             switch(_association_constraint){
@@ -919,7 +921,6 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                 }
             }
             
-
             if (generateCond) {
                 left_mapped_instances.insert(left_id); 
 
@@ -950,18 +951,18 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                         subject.append(boost::lexical_cast<string>(left_id));
 
                         // If the subject is not yet printed, print it once
-                        if (find(resource_gen_log.begin(), resource_gen_log.end(), subject) == resource_gen_log.end()) {
+                        if (resource_gen_log.find(subject) == resource_gen_log.end()) {
                             resource_map.find(_subject_type)->second->generate_one(n_map, left_id);
-                            resource_gen_log.push_back(subject);
+                            resource_gen_log.insert(subject);
                         }
 
                         object.append(n_map.replace(_object_type));
                         object.append(boost::lexical_cast<string>(right_id));
 
                         // If the object is not yet printed, print it once
-                        if (find(resource_gen_log.begin(), resource_gen_log.end(), object) == resource_gen_log.end()) {
+                        if (resource_gen_log.find(object) == resource_gen_log.end()) {
                             resource_map.find(_object_type)->second->generate_one(n_map, right_id);
-                           resource_gen_log.push_back(object);
+                            resource_gen_log.insert(object);
                         }
 
                         predicate.append(n_map.replace(_predicate));
@@ -981,7 +982,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
 
                         //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
                         triple_st line (subject_str, predicate_str, object_str);
-                        cout<<line<<" .\n";
+                        cout << line << " ." << endl;
 
                         // Save type assertions...
                         if (predicate.compare("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")==0){
@@ -1005,7 +1006,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
     }
 }
 
-void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, vector<string> & resource_gen_log){
+void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -1056,8 +1057,9 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                 string subject="";
                 subject.append(n_map.replace(_subject_type));
                 subject.append(boost::lexical_cast<string>(left_id));
+                generateCondExist = (resource_gen_log.find(subject) != resource_gen_log.end());
 
-                generateCondExist = find(resource_gen_log.begin(), resource_gen_log.end(), subject) != resource_gen_log.end();
+                bool generateCond = generateCondIndp;
 
                 bool generateCond = false;
                 switch(_association_constraint){
@@ -1119,9 +1121,9 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 subject_str.append(">");
 
                                 // If the object is not yet printed, print it once
-                                if (find(resource_gen_log.begin(), resource_gen_log.end(), subject) == resource_gen_log.end()){
+                                if (resource_gen_log.find(subject) == resource_gen_log.end()){
                                     resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id);
-                                    resource_gen_log.push_back(subject);
+                                    resource_gen_log.insert(subject);
                                 }
 
                                 predicate_str.append("<");
@@ -1133,14 +1135,14 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 object_str.append(">");
                                 
                                 // If the object is not yet printed, print it once
-                                if (find(resource_gen_log.begin(), resource_gen_log.end(), object) == resource_gen_log.end()) {
+                                if (resource_gen_log.find(object) == resource_gen_log.end()) {
                                     resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index);
-                                    resource_gen_log.push_back(object);
+                                    resource_gen_log.insert(object);
                                 }
 
                                 //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
                                 triple_st line (subject_str, predicate_str, object_str);
-                                cout<<line<<" .\n";
+                                cout << line << " ." << endl;
                             }
                         }
                     }
