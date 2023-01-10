@@ -22,6 +22,8 @@
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include "boost/date_time/posix_time/posix_time_types.hpp"
 #include <boost/lexical_cast.hpp>
+#include <boost/format.hpp> 
+#include <boost/filesystem.hpp> 
 
 namespace bpt = boost::posix_time;
 
@@ -586,7 +588,13 @@ resource_m_t::~resource_m_t (){
     }
 }
 
-void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
+void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id, const boost::filesystem::path & output_dir){
+
+    // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_type_prefix) % n_map.get_suffix(_type_prefix) % boost::lexical_cast<string>(id)));
+    // boost::filesystem::create_directories(fn.parent_path());
+    // ofstream fo;
+    // fo.open(fn.string(), fstream::app);
+
     string subject = "";
     subject.append("<");
     subject.append(n_map.replace(_type_prefix));
@@ -600,47 +608,58 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id){
     heritage_object.append(">");
 
     if (_predicate_group_array.size() > 0){
-        // cout << "Generate 1 #type: " << subject << endl;
+        // fo << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
         cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
-    }
 
-    for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
-        predicate_group_m_t * predicate_group = *itr2;
-        if (!predicate_group->_post_process){
-            float draw = ((float) rand())/((float)RAND_MAX);
-            if (draw<=predicate_group->_gen_probability){
-                for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
-                    predicate_m_t * predicate = *itr3;
-                    string triple_str = "";
-                    triple_str.append(subject);
-                    triple_str.append("\t");
-                    triple_str.append(predicate->generate(n_map));
+        for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
+            predicate_group_m_t * predicate_group = *itr2;
+            if (!predicate_group->_post_process){
+                float draw = ((float) rand())/((float)RAND_MAX);
+                if (draw<=predicate_group->_gen_probability){
+                    for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
+                        predicate_m_t * predicate = *itr3;
+                        string triple_str = "";
+                        triple_str.append(subject);
+                        triple_str.append("\t");
+                        triple_str.append(predicate->generate(n_map));
 
-                    int tab1_index = triple_str.find("\t");
-                    int tab2_index = triple_str.find("\t", tab1_index+1);
+                        int tab1_index = triple_str.find("\t");
+                        int tab2_index = triple_str.find("\t", tab1_index+1);
 
-                    //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
-                    triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                    cout << line << " ." << endl;
+                        //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
+                        triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
+                        // fo << line << " ." << endl;
+                        cout << line << " ." << endl;
+                    }
                 }
             }
         }
+        // fo.close();
+    } else {
+      /*
+        TODO: When the resource is a reference (no predicate group):
+        1. Check the file representing this resource exists.
+        2. If not exists, exit and err
+        3. If exists, read and print every line in that file
+       */  
     }
 }
 
-void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map){
+void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir){
     if (id_cursor_map.find(_type_prefix)==id_cursor_map.end()){
         id_cursor_map[_type_prefix] = 0;
     }
 
     // Disabled because we only materialize resource while generating associations
-    for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
-        resource_m_t::generate_one(n_map, id);
-    }
+    // for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
+    //     resource_m_t::generate_one(n_map, id, output_dir);
+    // }
+
     id_cursor_map[_type_prefix] += _scaling_coefficient;
 }
 
-void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, unsigned int id){
+void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, unsigned int id, const boost::filesystem::path & output_dir){
+
     string subject = "";
     subject.append("<");
     subject.append(n_map.replace(_type_prefix));
@@ -660,9 +679,15 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
         if (predicate_group->_post_process && t_map.instanceof(subject, n_map.replace(*(predicate_group->_type_restriction)))){
             float draw = ((float) rand())/((float)RAND_MAX);
             if (draw<=predicate_group->_gen_probability){
+                // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_type_prefix) % n_map.get_suffix(_type_prefix) % boost::lexical_cast<string>(id)));
+                // boost::filesystem::create_directories(fn.parent_path());
+                // ofstream fo;
+                // fo.open(fn.string(), fstream::app);
+
                 if (! isSubjectTypeAsserted){
                     // cout << "Restrict type 1 #type: " << subject << endl;
-                    cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". \n";
+                    // fo << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". " << endl;
+                    cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". " << endl;
                     isSubjectTypeAsserted = true;
                 }
                 for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
@@ -677,17 +702,19 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
 
                     //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
                     triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
+                    // fo << line << " ." << endl;
                     cout << line << " ." << endl;
                 }
+                // fo.close();
             }
         }
     }
 }
 
-void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map){
+void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir){
     unsigned int max_count = (id_cursor_map.find(_type_prefix))->second;
     for (unsigned int id=0; id<max_count; id++){
-        resource_m_t::process_type_restrictions_one(n_map, t_map, id);
+        resource_m_t::process_type_restrictions_one(n_map, t_map, id, output_dir);
     }
 }
 
@@ -779,6 +806,18 @@ string namespace_map::replace (const string & content) const{
     }
 }
 
+string namespace_map::get_suffix(const string & content) const {
+    unsigned int pos = content.find_first_of(':');
+    if (pos!=string::npos){
+        string alias = content.substr(0, pos);
+        lookup(alias);
+        string suffix = content.substr(pos+1);
+        return suffix;
+    } else {
+        return content;
+    }
+}
+
 void association_m_t::init (string subject_type, string predicate, string object_type){
     _post_process = false;
     _subject_type = subject_type;
@@ -854,7 +893,7 @@ association_m_t::~association_m_t (){
     delete _object_type_restriction;
 }
 
-void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
+void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -896,26 +935,24 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
             candidateSubject.append(boost::lexical_cast<string>(left_id));
             generateCondExist = (resource_gen_log.find(candidateSubject) != resource_gen_log.end());
 
-            bool generateCond = generateCondIndp;
-
             bool generateCond = false;
             switch(_association_constraint){
-                case ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT: {
+                case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN: {
                     generateCond = generateCondIndp;
                     break;
                 }
 
-                case ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY: {
+                case ASSOCIATION_CONSTRAIN_TYPES::PREVIOUSLY_EXISTED: {
                     generateCond = generateCondExist;
                     break;
                 }
 
-                case ASSOCIATION_CONSTRAIN_TYPES::PARTIAL: {
+                case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_OR_PREVIOUSLY_EXISTED: {
                     generateCond = generateCondIndp || generateCondExist;
                     break;
                 }
 
-                case ASSOCIATION_CONSTRAIN_TYPES::FULL: {
+                case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_AND_PREVIOUSLY_EXISTED: {
                     generateCond = generateCondIndp && generateCondExist;
                     break;
                 }
@@ -952,7 +989,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
 
                         // If the subject is not yet printed, print it once
                         if (resource_gen_log.find(subject) == resource_gen_log.end()) {
-                            resource_map.find(_subject_type)->second->generate_one(n_map, left_id);
+                            resource_map.find(_subject_type)->second->generate_one(n_map, left_id, output_dir);
                             resource_gen_log.insert(subject);
                         }
 
@@ -961,7 +998,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
 
                         // If the object is not yet printed, print it once
                         if (resource_gen_log.find(object) == resource_gen_log.end()) {
-                            resource_map.find(_object_type)->second->generate_one(n_map, right_id);
+                            resource_map.find(_object_type)->second->generate_one(n_map, right_id, output_dir);
                             resource_gen_log.insert(object);
                         }
 
@@ -980,14 +1017,23 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                         object_str.append(object);
                         object_str.append(">");
 
+                        // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_subject_type) % n_map.get_suffix(_subject_type) % boost::lexical_cast<string>(left_id)));
+                        // boost::filesystem::create_directories(fn.parent_path());
+                        // ofstream fo;
+                        // fo.open(fn.string(), fstream::app);
+
                         //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
                         triple_st line (subject_str, predicate_str, object_str);
+                        // fo << line << " ." << endl;
                         cout << line << " ." << endl;
+
+                        // fo.close();
 
                         // Save type assertions...
                         if (predicate.compare("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")==0){
                             t_map.insert(subject, object);
                         }
+
                     } else {
                         //cout<<"[association_m_t::generate] Warning:: failed to greedily satisfy cardinality constraints..."<<"\n";
                         //cout<<"[association_m_t::generate] Ignoring association "
@@ -1006,7 +1052,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
     }
 }
 
-void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
+void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -1059,26 +1105,24 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                 subject.append(boost::lexical_cast<string>(left_id));
                 generateCondExist = (resource_gen_log.find(subject) != resource_gen_log.end());
 
-                bool generateCond = generateCondIndp;
-
                 bool generateCond = false;
                 switch(_association_constraint){
-                    case ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT: {
+                    case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN: {
                         generateCond = generateCondIndp;
                         break;
                     }
 
-                    case ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY: {
+                    case ASSOCIATION_CONSTRAIN_TYPES::PREVIOUSLY_EXISTED: {
                         generateCond = generateCondExist;
                         break;
                     }
 
-                    case ASSOCIATION_CONSTRAIN_TYPES::PARTIAL: {
+                    case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_OR_PREVIOUSLY_EXISTED: {
                         generateCond = generateCondIndp || generateCondExist;
                         break;
                     }
 
-                    case ASSOCIATION_CONSTRAIN_TYPES::FULL: {
+                    case ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_AND_PREVIOUSLY_EXISTED: {
                         generateCond = generateCondIndp && generateCondExist;
                         break;
                     }
@@ -1122,7 +1166,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
 
                                 // If the object is not yet printed, print it once
                                 if (resource_gen_log.find(subject) == resource_gen_log.end()){
-                                    resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id);
+                                    resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id, output_dir);
                                     resource_gen_log.insert(subject);
                                 }
 
@@ -1136,13 +1180,20 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 
                                 // If the object is not yet printed, print it once
                                 if (resource_gen_log.find(object) == resource_gen_log.end()) {
-                                    resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index);
+                                    resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index, output_dir);
                                     resource_gen_log.insert(object);
                                 }
 
+                                // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_subject_type) % n_map.get_suffix(_subject_type) % boost::lexical_cast<string>(left_id)));
+                                // boost::filesystem::create_directories(fn.parent_path());
+                                // ofstream fo;
+                                // fo.open(fn.string(), fstream::app);
+
                                 //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
                                 triple_st line (subject_str, predicate_str, object_str);
+                                // fo << line << " ." << endl;
                                 cout << line << " ." << endl;
+                                // fo.close();
                             }
                         }
                     }
@@ -1166,7 +1217,7 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
     DISTRIBUTION_TYPES::enum_t right_distribution = DISTRIBUTION_TYPES::UNIFORM;
     string * subject_type_restriction = NULL;
     string * object_type_restriction = NULL;
-    ASSOCIATION_CONSTRAIN_TYPES::enum_t association_constraint = ASSOCIATION_CONSTRAIN_TYPES::INDEPENDANT;
+    ASSOCIATION_CONSTRAIN_TYPES::enum_t association_constraint = ASSOCIATION_CONSTRAIN_TYPES::CHOSEN;
 
     // regex normal_regex = regex("normal|NORMAL\\[([0-9]+(\\.[0-9]+)),\\s*([0-9]+(\\.[0-9]+))\\]");
     // smatch normal_match;
@@ -1180,12 +1231,14 @@ association_m_t * association_m_t::parse (const map<string, unsigned int> & id_c
                 if (token.compare("#association")!=0 && token.compare("#association1")!=0 && token.compare("#association2")!=0 && token.compare("#association3")!=0){
                     cerr<<"[association_m_t::parse()]\tExpecting #association..."<<"\n";
                     exit(0);
+                } else if (token.compare("#association") == 0) {
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::CHOSEN;
                 } else if (token.compare("#association1")==0){
-                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::IF_PREVIOUSLY_EXISTED_ONLY;
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::PREVIOUSLY_EXISTED;
                 } else if (token.compare("#association2")==0){
-                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::PARTIAL;
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_OR_PREVIOUSLY_EXISTED;
                 } else if (token.compare("#association3")==0){
-                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::FULL;
+                    association_constraint = ASSOCIATION_CONSTRAIN_TYPES::CHOSEN_AND_PREVIOUSLY_EXISTED;
                 }
                 break;
             }
@@ -1894,6 +1947,12 @@ model::model(const char * filename){
     parse(filename);
 }
 
+model::model(const char * filename, const boost::filesystem::path & output_dir){
+    _output_dir = output_dir;
+    srand (time(NULL));
+    parse(filename);
+}
+
 model::~model(){
     for (vector<resource_m_t*>::iterator itr=_resource_array.begin(); itr!=_resource_array.end(); itr++){
         delete *itr;
@@ -1910,7 +1969,7 @@ void model::generate (int scale_factor){
         for (vector<resource_m_t*>::iterator itr2=_resource_array.begin(); itr2!=_resource_array.end(); itr2++){
             resource_m_t * resource = *itr2;
             if (i==0 || resource->_scalable){
-                resource->generate(_namespace_map, _id_cursor_map);
+                resource->generate(_namespace_map, _id_cursor_map, _output_dir);
             }
         }
     }
@@ -1919,21 +1978,21 @@ void model::generate (int scale_factor){
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->generate(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
+        association->generate(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log, _output_dir);
     }
 
     boost::posix_time::ptime t3 (bpt::microsec_clock::universal_time());
 
     for (vector<resource_m_t*>::iterator itr1=_resource_array.begin(); itr1!=_resource_array.end(); itr1++){
         resource_m_t * resource = *itr1;
-        resource->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map);
+        resource->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _output_dir);
     }
 
     boost::posix_time::ptime t4 (bpt::microsec_clock::universal_time());
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
+        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log, _output_dir);
     }
 
     boost::posix_time::ptime t5 (bpt::microsec_clock::universal_time());
@@ -2589,3 +2648,135 @@ int main(int argc, const char* argv[]) {
     dictionary::destroy_instance();
     return 0;
 }
+
+// int main(int argc, const char* argv[]) {
+//     dictionary * dict = dictionary::get_instance();
+//     if ( (argc==3 || argc==5 || argc==6 || argc>=7) && argv[1][0]=='-'){
+        
+//         dict->init();
+//         const char * model_filename = argv[2];
+        
+//         boost::filesystem::path output_dir(argv[3]);
+//         if (!output_dir.is_absolute()){
+//             cerr << "<output> must be an absolute path!" << endl;
+//             return 1;
+//         }
+
+//         if (boost::filesystem::exists(output_dir)){
+//             unsigned long nbFilesRemoved = boost::filesystem::remove_all(output_dir);
+//             cout << "Removed " << nbFilesRemoved << " files..." << endl;
+//         }
+
+//         boost::filesystem::create_directories(output_dir);
+//         model cur_model (model_filename, boost::filesystem::canonical(output_dir));
+  
+//         //statistics stat (cur_model);
+//         if (argc==5 && argv[1][0]=='-' && argv[1][1]=='d'){
+//             unsigned int scale_factor = boost::lexical_cast<unsigned int>(string(argv[4]));
+//             cur_model.generate(scale_factor);
+//             cur_model.save("saved.txt");
+//             //statistics stat (&cur_model, triples);
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==6 && argv[1][0]=='-' && argv[1][1]=='q'){
+//             cur_model.load("saved.txt");
+//             unsigned int query_count = boost::lexical_cast<unsigned int>(string(argv[(argc-2)]));
+//             unsigned int recurrence_factor = boost::lexical_cast<unsigned int>(string(argv[(argc-1)]));
+//             vector<string> workload;
+
+//             string line, qTemplateStr = "";
+//             while (getline(cin, line)){
+//                 if (boost::starts_with(line, "#end")){
+//                     query_template_m_t q_template (&cur_model);
+//                     q_template.parse_str(qTemplateStr);
+//                     q_template.instantiate(query_count, recurrence_factor, workload);
+//                     qTemplateStr = "";
+//                 } else {
+//                     qTemplateStr.append(line);
+//                     qTemplateStr.append("\n");
+//                 }
+//             }
+
+//             // obtain a time-based seed:
+//             //unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+//             //shuffle (workload.begin(), workload.end(), std::default_random_engine(seed));
+
+//             for (int qid=0; qid<workload.size(); qid++){
+//                 cout<<workload[qid];
+//             }
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc>=7 && argv[1][0]=='-' && argv[1][1]=='q'){
+//             cur_model.load("saved.txt");
+//             unsigned int query_count = boost::lexical_cast<unsigned int>(string(argv[(argc-2)]));
+//             unsigned int recurrence_factor = boost::lexical_cast<unsigned int>(string(argv[(argc-1)]));
+//             vector<string> workload;
+//             for (int template_id=4; template_id<(argc-2); template_id++){
+//                 const char * query_filename = argv[template_id];
+//                 query_template_m_t q_template (&cur_model);
+//                 q_template.parse(query_filename);
+//                 q_template.instantiate(query_count, recurrence_factor, workload);
+//             }
+
+//             /// obtain a time-based seed:
+//             //unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+//             //shuffle (workload.begin(), workload.end(), std::default_random_engine(seed));
+
+//             for (int qid=0; qid<workload.size(); qid++){
+//                 cout<<workload[qid];
+//             }
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==7 && argv[1][0]=='-' && argv[1][1]=='s'){
+//             cur_model.load("saved.txt");
+//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             int maxQSize = boost::lexical_cast<int>(argv[5]);
+//             int qCount = boost::lexical_cast<int>(argv[6]);
+//             statistics stat (&cur_model, triple_array, maxQSize, qCount, 1, false, false);
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==8 && argv[1][0]=='-' && argv[1][1]=='s'){
+//             cur_model.load("saved.txt");
+//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             int maxQSize = boost::lexical_cast<int>(argv[5]);
+//             int qCount = boost::lexical_cast<int>(argv[6]);
+//             int constCount = boost::lexical_cast<int>(argv[7]);
+//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, false, false);
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==9 && argv[1][0]=='-' && argv[1][1]=='s'){
+//             cur_model.load("saved.txt");
+//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             int maxQSize = boost::lexical_cast<int>(argv[5]);
+//             int qCount = boost::lexical_cast<int>(argv[6]);
+//             int constCount = boost::lexical_cast<int>(argv[7]);
+//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[8][0]=='t', false);
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==10 && argv[1][0]=='-' && argv[1][1]=='s'){
+//             cur_model.load("saved.txt");
+//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             int maxQSize = boost::lexical_cast<int>(argv[5]);
+//             int qCount = boost::lexical_cast<int>(argv[6]);
+//             int constCount = boost::lexical_cast<int>(argv[7]);
+//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[8][0]=='t', argv[9][0]=='t');
+//             dictionary::destroy_instance();
+//             return 0;
+//         } else if (argc==3 && argv[1][0]=='-' && argv[1][1]=='x'){
+//             volatility_gen::test();
+//             dictionary::destroy_instance();
+//             return 0;
+//         }
+//     }
+
+//     cout<<"Usage:::\t./watdiv -d <model-file> <output> <scale-factor>"<<"\n";
+//     cout<<"Usage:::\t./watdiv -q <model-file> <output> <query-count> <recurrence-factor>"<<"\n";
+//     cout<<"        \t./watdiv -q <model-file> <output> <query-file> <query-count> <recurrence-factor>"<<"\n";
+//     cout<<"Usage:::\t./watdiv -s <model-file> <output> <dataset-file> <max-query-size> <query-count>"<<"\n";
+//     cout<<"        \t./watdiv -s <model-file> <output> <dataset-file> <max-query-size> <query-count> <constant-per-query-count>"<<"\n";
+//     cout<<"        \t./watdiv -s <model-file> <output> <dataset-file> <max-query-size> <query-count> <constant-per-query-count> <constant-join-vertex-allowed?>"<<"\n";
+//     //cout<<"Usage:::\t./watdiv -x"<<"\n";
+//     //cout<<"        \t./watdiv -s <model-file> <dataset-file> <max-query-size> <query-count> <constant-per-query-count> <constant-join-vertex-allowed?> <duplicate-edges-allowed?>"<<"\n";
+//     dictionary::destroy_instance();
+//     return 0;
+// }

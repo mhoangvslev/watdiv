@@ -16,7 +16,7 @@ CFLAGS = -std=c++0x -Wall
 RESINC = 
 LIBDIR =  -L$(BOOST_HOME)/lib
 #LIB =  $(BOOST_HOME)/lib/libboost_date_time.a
-LIB = -lboost_date_time
+LIB = -lboost_date_time -lboost_filesystem -lboost_system
 LDFLAGS = 
 
 INC_DEBUG =  $(INC)
