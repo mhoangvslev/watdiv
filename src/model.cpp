@@ -930,6 +930,10 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                 generateCondIndp = (pr<=_left_cover);
             }
 
+            if (_association_constraint == ASSOCIATION_CONSTRAIN_TYPES::PREVIOUSLY_EXISTED){
+                left_id = i;
+            }
+
             string candidateSubject = "";
             candidateSubject.append(n_map.replace(_subject_type));
             candidateSubject.append(boost::lexical_cast<string>(left_id));
@@ -1098,6 +1102,10 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                 } else {
                     double pr = ((double) rand()) / ((double) RAND_MAX);
                     generateCondIndp = (pr<=_left_cover);
+                }
+
+                if (_association_constraint == ASSOCIATION_CONSTRAIN_TYPES::PREVIOUSLY_EXISTED){
+                    left_id = i;
                 }
 
                 string subject="";
