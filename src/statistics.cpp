@@ -82,10 +82,10 @@ bool statistics_st::operator< (const statistics_st & rhs) const{
     }
 }
 
-statistics::statistics(const model * mdl, const vector<triple_st> & triple_array, int maxQSize, int qCount, int constCount, bool constJoinVertexAllowed, bool dupEdgesAllowed){
+statistics::statistics(const model * mdl, const vector<nquad_st> & nquad_array, int maxQSize, int qCount, int constCount, bool constJoinVertexAllowed, bool dupEdgesAllowed){
     srand (time(NULL));
     _model = mdl;
-    index_triples(triple_array);
+    index_triples(nquad_array);
     extract_schema(*_model);
     //print_graph();
 
@@ -641,10 +641,10 @@ void statistics::print_stats() const{
 }
 */
 
-void statistics::index_triples(const vector<triple_st> & triple_array){
-    for (int i=0; i<triple_array.size(); i++){
-        _spo_index.push_back(triple_array[i]);
-        _ops_index.push_back(triple_array[i]);
+void statistics::index_triples(const vector<nquad_st> & nquad_array){
+    for (int i=0; i<nquad_array.size(); i++){
+        _spo_index.push_back(nquad_array[i]);
+        _ops_index.push_back(nquad_array[i]);
     }
     sort(_spo_index.begin(), _spo_index.end(), s_compare());
     sort(_ops_index.begin(), _ops_index.end(), o_compare());
@@ -708,9 +708,9 @@ pair<double, double> statistics::sample (string entity, DISTRIBUTION_TYPES::enum
         string rdf_term = generator->generate(*_model);
         if (direction){
             min_subject.append(rdf_term);
-            triple_st min_range (min_subject, min_predicate, min_object);
+            nquad_st min_range (min_subject, min_predicate, min_object);
             //cout<<"Searching for "<<min_range<<"\n";
-            vector<triple_st>::const_iterator itr = lower_bound(_spo_index.begin(), _spo_index.end(), min_range, s_compare());
+            vector<nquad_st>::const_iterator itr = lower_bound(_spo_index.begin(), _spo_index.end(), min_range, s_compare());
             for (; itr!=_spo_index.end() && itr->_subject.compare(min_subject)==0; itr++){
                 //cout<<"Debug "<<*itr<<"\n";
                 if (itr->_predicate.compare(min_predicate)==0){
@@ -719,9 +719,9 @@ pair<double, double> statistics::sample (string entity, DISTRIBUTION_TYPES::enum
             }
         } else {
             min_object.append(rdf_term);
-            triple_st min_range (min_subject, min_predicate, min_object);
+            nquad_st min_range (min_subject, min_predicate, min_object);
             //cout<<"Searching for "<<min_range<<"\n";
-            vector<triple_st>::const_iterator itr = lower_bound(_ops_index.begin(), _ops_index.end(), min_range, o_compare());
+            vector<nquad_st>::const_iterator itr = lower_bound(_ops_index.begin(), _ops_index.end(), min_range, o_compare());
             for (; itr!=_ops_index.end() && itr->_object.compare(min_object)==0; itr++){
                 //cout<<"Debug "<<*itr<<"\n";
                 if (itr->_predicate.compare(min_predicate)==0){

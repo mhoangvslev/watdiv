@@ -46,7 +46,7 @@ ostream& operator<<(ostream& os, const statistics_st & stats);
 
 class statistics{
     public:
-        statistics(const model * mdl, const vector<triple_st> & triple_array, int maxQSize, int qCount, int constCount, bool constJoinVertexAllowed, bool dupEdgesAllowed);
+        statistics(const model * mdl, const vector<nquad_st> & nquad_array, int maxQSize, int qCount, int constCount, bool constJoinVertexAllowed, bool dupEdgesAllowed);
         ~statistics();
 
         ///void compute();
@@ -54,11 +54,11 @@ class statistics{
     private:
         const model * _model;
         map<string, set<statistics_st> > graph;
-        vector<triple_st> _spo_index;
-        vector<triple_st> _ops_index;
+        vector<nquad_st> _spo_index;
+        vector<nquad_st> _ops_index;
         map<string, pair<double, double> > _statistics_table;
 
-        void index_triples(const vector<triple_st> & triple_array);
+        void index_triples(const vector<nquad_st> & nquad_array);
 
         void extract_schema(const model & mdl);
         void populate_graph(const vector<statistics_st> & tuples);

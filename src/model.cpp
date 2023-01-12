@@ -15,6 +15,7 @@
 
 #include <math.h>
 
+#include <boost/regex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -24,6 +25,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp> 
 #include <boost/filesystem.hpp> 
+#include <boost/algorithm/string/regex.hpp>
 
 namespace bpt = boost::posix_time;
 
@@ -127,7 +129,23 @@ ostream& operator<<(ostream& os, const DISTRIBUTION_TYPES::enum_t & distribution
     return os;
 }
 
-triple_st::triple_st (const string & line){
+string get_output_file(const string & output_dir, const namespace_map & n_map, const string & type_prefix, const int & id, const bool & external) {
+    string output_org = external ? n_map.lookup("__output_dep_org") : n_map.lookup("__output_org");
+    string result = "";
+    if (output_org.compare("monolithic") == 0){
+        result = boost::str(boost::format("%1%/%2%.nq") % output_dir % n_map.lookup("__output_file")); 
+    } else if (output_org.compare("fragmented") == 0) {
+        result = boost::str(boost::format("%1%/%2%/%3%%4%.nq") % output_dir % n_map.get_suffix(type_prefix) % n_map.get_suffix(type_prefix) % boost::lexical_cast<string>(id)); 
+    } else {
+        cerr << "Unknown config entry: " << output_org << endl;
+        exit(1);
+    }
+
+    // cout << "Exporting to " << result << endl;
+    return result;
+}
+
+nquad_st::nquad_st (const string & line){
     vector<string> result;
     string trimmed = line.substr(0, line.find_last_of("."));
     boost::trim(trimmed);
@@ -135,24 +153,26 @@ triple_st::triple_st (const string & line){
     _subject = result[0];
     _predicate = result[1];
     _object = result[2];
+    _source = result[3];
 }
 
-triple_st::triple_st (const string & subject, const string & predicate, const string & object){
+nquad_st::nquad_st (const string & subject, const string & predicate, const string & object, const string & source){
     _subject = subject;
     _predicate = predicate;
     _object = object;
+    _source = source;
 }
 
-bool triple_st::operator== (const triple_st & rhs) const{
-    return _subject.compare(rhs._subject)==0 && _predicate.compare(rhs._predicate)==0 && _object.compare(rhs._object)==0;
+bool nquad_st::operator== (const nquad_st & rhs) const{
+    return _subject.compare(rhs._subject)==0 && _predicate.compare(rhs._predicate)==0 && _object.compare(rhs._object)==0 && _source.compare(rhs._source) == 0;
 }
 
-vector<triple_st> triple_st::parse_file (const char * filename){
-    vector<triple_st> result;
+vector<nquad_st> nquad_st::parse_file (const char * filename){
+    vector<nquad_st> result;
     ifstream ifs (filename);
     string line;
     while ( getline(ifs, line) ){
-        triple_st cur_triple (line);
+        nquad_st cur_triple (line);
         result.push_back(cur_triple);
         //cout << cur_triple << "\n";
     }
@@ -160,12 +180,12 @@ vector<triple_st> triple_st::parse_file (const char * filename){
     return result;
 }
 
-ostream& operator<<(ostream& os, const triple_st & triple){
-    os<<triple._subject<<"\t"<<triple._predicate<<"\t"<<triple._object;
+ostream& operator<<(ostream& os, const nquad_st & quad){
+    os<<quad._subject<<"\t"<<quad._predicate<<"\t"<<quad._object<<"\t"<<quad._source;
     return os;
 }
 
-bool s_compare::operator() (const triple_st & lhs, const triple_st & rhs) const{
+bool s_compare::operator() (const nquad_st & lhs, const nquad_st & rhs) const{
     if (lhs._subject.compare(rhs._subject)!=0){
         return lhs._subject.compare(rhs._subject) < 0;
     }
@@ -175,9 +195,15 @@ bool s_compare::operator() (const triple_st & lhs, const triple_st & rhs) const{
     if (lhs._object.compare(rhs._object)!=0){
         return lhs._object.compare(rhs._object) < 0;
     }
+    if (lhs._source.compare(rhs._source)!=0){
+        return lhs._source.compare(rhs._source) < 0;
+    }
 }
 
-bool o_compare::operator() (const triple_st & lhs, const triple_st & rhs) const{
+bool o_compare::operator() (const nquad_st & lhs, const nquad_st & rhs) const{
+    if (lhs._source.compare(rhs._source)!=0){
+        return lhs._source.compare(rhs._source) < 0;
+    }
     if (lhs._object.compare(rhs._object)!=0){
         return lhs._object.compare(rhs._object) < 0;
     }
@@ -588,18 +614,164 @@ resource_m_t::~resource_m_t (){
     }
 }
 
-void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id, const boost::filesystem::path & output_dir){
+void split_URIRef(const string & item, const boost::regex & pattern, string & prefix, string & suffix){
+    /**
+     * @brief split an URIRef. If not URIRef, pattern and prefix are unchanged.
+     *
+     */
+    if (boost::starts_with(item, "<") && boost::ends_with(item, ">")){
+        boost::sregex_token_iterator i(item.begin(), item.end(), pattern, -1);
+        boost::sregex_token_iterator j;
 
-    // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_type_prefix) % n_map.get_suffix(_type_prefix) % boost::lexical_cast<string>(id)));
-    // boost::filesystem::create_directories(fn.parent_path());
-    // ofstream fo;
-    // fo.open(fn.string(), fstream::app);
+        vector<string> tokens;
+        
+        while(i != j) {
+            tokens.push_back(*i);
+            i++;
+        }
+
+        suffix = tokens.back();
+        tokens.pop_back();
+        prefix = "";
+        // typically, in an URIRef, # only appears in the end and elsewhere is /
+
+        for (vector<string>::iterator itr=tokens.begin(); itr != tokens.end(); itr++){
+            string token = *itr;
+            prefix.append(token);
+            if (tokens.size() > 1) {
+                prefix.append("/");
+            }
+        }
+
+        if (boost::starts_with(prefix, "<")){
+            prefix = prefix.substr(1, prefix.size()-1);
+        }
+
+        if (boost::ends_with(suffix, ">")){
+            suffix = suffix.substr(0, suffix.size()-1);
+        }
+    }
+}
+
+string localize_item(const string & URIRef, const namespace_map & n_map) {
+    /**
+     * @brief Given an URIRef, get the instance name and prefix, then reassign the prefix to the host's domain
+     * @return string
+     */
+
+    string prefix, suffix;
+    split_URIRef(URIRef, boost::regex("#|/"), prefix, suffix);    
+
+    if (prefix.compare("") == 0 && suffix.compare("") == 0){
+        return URIRef;
+        
+    } else if (boost::starts_with(prefix, "http") or n_map.lookup_prefix(prefix).compare("") == 0){
+        string result = "";
+        result.append("<");
+        result.append(n_map.lookup("__provenance"));
+        result.append(suffix);
+        result.append(">");
+        return result;
+    }   
+    
+    return URIRef;
+}
+
+void resource_m_t::generate_dependencies(const namespace_map & n_map, const string & type_prefix, const unsigned int & id, set<string> & resource_gen_log) {
+    /**
+     * @brief Recursively generate external resource, i.e when no predicates are present
+     * @todo When the resource is a reference (no predicate group):
+     *  1. Check the file representing this resource exists.
+     *  2. If not exists, exit and err
+     *  3. If exists, read and print every line in that file
+     *      3.1. Parse the line and obtain <subject, predicate, object, src>
+     *      3.2. If the sybject abd object is URIRef, localize it
+     *      3.3. If the object is URIRef and it's another external reference, recursively execute this function
+     */
+
+    string output_dir = n_map.lookup("__output_dir");
+    string provenance = n_map.get_provenance();
+
+    string dependency_prefix = "__output_dep";
+    string dependency_dir = n_map.lookup(dependency_prefix);
+
+    boost::filesystem::path dependency_file (get_output_file(dependency_dir, n_map, type_prefix, id, true));
+
+    if (boost::filesystem::exists(dependency_file)) {
+
+        boost::filesystem::path fn (get_output_file(output_dir, n_map, type_prefix, id, false));
+        boost::filesystem::create_directories(fn.parent_path());
+        ofstream fo;
+        fo.open(fn.string(), fstream::app);
+
+        boost::filesystem::ifstream inFile(dependency_file);
+        string line;
+        while(getline(inFile, line)) {
+            int tab1_index = line.find("\t");
+            int tab2_index = line.find("\t", tab1_index+1);
+            int tab3_index = line.find("\t", tab2_index+1);
+
+            //nquad_lines.push_back(nquad_st(nquad_str.substr(0, tab1_index), nquad_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), nquad_str.substr(tab2_index+1)));
+            string localized_subject = localize_item(line.substr(0, tab1_index), n_map);
+            string dep_predicate = line.substr((tab1_index+1), (tab2_index-tab1_index-1)); 
+            string dep_object = line.substr((tab2_index+1), (tab3_index-tab2_index-1));
+            string localized_object = (dep_predicate.find("sameAs") != string::npos) ? dep_object : localize_item(dep_object, n_map);
+
+            nquad_st quad (localized_subject, dep_predicate, localized_object, provenance);
+            fo << quad << " . " << endl;
+
+            // Recursively generate subsequence dependencies
+            string prefix, suffix;
+            split_URIRef(dep_object, boost::regex("#|/"), prefix, suffix);
+
+            if (prefix.compare("") == 0 && suffix.compare("") == 0){
+                continue;
+            }
+
+            string object_type = n_map.lookup_prefix(prefix);
+
+            boost::smatch matched;
+            if (object_type.compare("") != 0 && boost::regex_match(suffix, matched, boost::regex("([A-Za-z_]+)(\\d+)"))){
+                
+                object_type.append(":");
+                object_type.append(matched[1]);
+                int object_id = boost::lexical_cast<int>(matched[2]);
+                string candidateObject = object_type + boost::lexical_cast<string>(object_id);
+
+                // cout << line << endl;
+                // cout << candidateObject << ", " << prefix << ", " << suffix << endl;
+
+                if (resource_gen_log.find(candidateObject) == resource_gen_log.end()){
+                    resource_gen_log.insert(candidateObject);
+                    generate_dependencies(n_map, object_type, object_id, resource_gen_log);
+                }
+            }
+        }
+
+        fo.close();
+
+    } else {
+        cerr << "File " << dependency_file << " doesn't exist." << endl;
+        exit(1);
+    }
+}
+
+void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int & id, set<string> & resource_gen_log){
+
+    string output_dir = n_map.lookup("__output_dir");
+    string provenance = n_map.get_provenance();
 
     string subject = "";
     subject.append("<");
-    subject.append(n_map.replace(_type_prefix));
+    subject.append(n_map.get_localized_name(_type_prefix));
     subject.append(boost::lexical_cast<string>(id));
     subject.append(">");
+
+    string global_subject = "";
+    global_subject.append("<");
+    global_subject.append(n_map.replace(_type_prefix));
+    global_subject.append(boost::lexical_cast<string>(id));
+    global_subject.append(">");
 
     // Add a heritage tp: <subject> rdfs:type <type_prefix>
     string heritage_object = "";
@@ -608,8 +780,19 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id, c
     heritage_object.append(">");
 
     if (_predicate_group_array.size() > 0){
-        // fo << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
-        cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
+        boost::filesystem::path fn (get_output_file(output_dir, n_map, _type_prefix, id, false));
+        boost::filesystem::create_directories(fn.parent_path());
+        ofstream fo;
+        fo.open(fn.string(), fstream::app);
+
+        nquad_st type_assertion_line(subject, "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>", heritage_object, provenance);
+        fo << type_assertion_line << " . " << endl;
+
+        nquad_st sameAs_line(subject, "<http://www.w3.org/2002/07/owl#sameAs>", global_subject, provenance);
+        fo << sameAs_line << " . " << endl;
+
+        // cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
+        // cout << subject << "\t" << "<http://www.w3.org/2002/07/owl#sameAs>" << "\t" << global_subject << "." << endl;
 
         for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
             predicate_group_m_t * predicate_group = *itr2;
@@ -618,51 +801,54 @@ void resource_m_t::generate_one (const namespace_map & n_map, unsigned int id, c
                 if (draw<=predicate_group->_gen_probability){
                     for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
                         predicate_m_t * predicate = *itr3;
-                        string triple_str = "";
-                        triple_str.append(subject);
-                        triple_str.append("\t");
-                        triple_str.append(predicate->generate(n_map));
+                        string nquad_str = "";
+                        nquad_str.append(subject);
+                        nquad_str.append("\t");
+                        nquad_str.append(predicate->generate(n_map));
+                        nquad_str.append("\t");
+                        nquad_str.append(n_map.get_provenance());
 
-                        int tab1_index = triple_str.find("\t");
-                        int tab2_index = triple_str.find("\t", tab1_index+1);
+                        int tab1_index = nquad_str.find("\t");
+                        int tab2_index = nquad_str.find("\t", tab1_index+1);
+                        int tab3_index = nquad_str.find("\t", tab2_index+1);
 
-                        //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
-                        triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                        // fo << line << " ." << endl;
-                        cout << line << " ." << endl;
+                        //nquad_lines.push_back(nquad_st(nquad_str.substr(0, tab1_index), nquad_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), nquad_str.substr(tab2_index+1)));
+                        nquad_st line (
+                            nquad_str.substr(0, tab1_index), 
+                            nquad_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), 
+                            nquad_str.substr((tab2_index+1), (tab3_index-tab2_index-1)), 
+                            nquad_str.substr(tab3_index+1)
+                        );
+                        fo << line << " . " << endl;
+                        // cout << line << " ." << endl;
                     }
                 }
             }
         }
-        // fo.close();
+        fo.close();
     } else {
-      /*
-        TODO: When the resource is a reference (no predicate group):
-        1. Check the file representing this resource exists.
-        2. If not exists, exit and err
-        3. If exists, read and print every line in that file
-       */  
+       generate_dependencies(n_map, _type_prefix, id, resource_gen_log);
     }
 }
 
-void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir){
+void resource_m_t::generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map){
     if (id_cursor_map.find(_type_prefix)==id_cursor_map.end()){
         id_cursor_map[_type_prefix] = 0;
     }
 
     // Disabled because we only materialize resource while generating associations
     // for (unsigned int id=id_cursor_map[_type_prefix]; id<(id_cursor_map[_type_prefix] + _scaling_coefficient); id++){
-    //     resource_m_t::generate_one(n_map, id, output_dir);
+    //     resource_m_t::generate_one(n_map, id);
     // }
 
     id_cursor_map[_type_prefix] += _scaling_coefficient;
 }
 
-void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, unsigned int id, const boost::filesystem::path & output_dir){
+void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, unsigned int id){
 
     string subject = "";
     subject.append("<");
-    subject.append(n_map.replace(_type_prefix));
+    subject.append(n_map.get_localized_name(_type_prefix));
     subject.append(boost::lexical_cast<string>(id));
     subject.append(">");
 
@@ -672,49 +858,59 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
     heritage_object.append(n_map.replace(_type_prefix));
     heritage_object.append(">");
 
+    string provenance = n_map.get_provenance();
+
     bool isSubjectTypeAsserted = false;
 
     for (vector<predicate_group_m_t*>::const_iterator itr2=_predicate_group_array.begin(); itr2!=_predicate_group_array.end(); itr2++){
         predicate_group_m_t * predicate_group = *itr2;
-        if (predicate_group->_post_process && t_map.instanceof(subject, n_map.replace(*(predicate_group->_type_restriction)))){
+        if (predicate_group->_post_process && t_map.instanceof(subject, n_map.get_localized_name(*(predicate_group->_type_restriction)))){
             float draw = ((float) rand())/((float)RAND_MAX);
             if (draw<=predicate_group->_gen_probability){
-                // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_type_prefix) % n_map.get_suffix(_type_prefix) % boost::lexical_cast<string>(id)));
-                // boost::filesystem::create_directories(fn.parent_path());
-                // ofstream fo;
-                // fo.open(fn.string(), fstream::app);
+                boost::filesystem::path fn (get_output_file(n_map.lookup("__output_dir"), n_map, _type_prefix, id, false));
+                boost::filesystem::create_directories(fn.parent_path());
+                ofstream fo;
+                fo.open(fn.string(), fstream::app);
 
                 if (! isSubjectTypeAsserted){
                     // cout << "Restrict type 1 #type: " << subject << endl;
-                    // fo << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". " << endl;
-                    cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << ". " << endl;
+                    nquad_st type_assertion_line(subject, "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>", heritage_object, provenance);
+                    fo << type_assertion_line << " . " << endl;
+                    // cout << type_assertion_line << ". " << endl;
                     isSubjectTypeAsserted = true;
                 }
                 for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
                     predicate_m_t * predicate = *itr3;
-                    string triple_str = "";                    
-                    triple_str.append(subject);
-                    triple_str.append("\t");
-                    triple_str.append(predicate->generate(n_map));
+                    string nquad_str = "";                    
+                    nquad_str.append(subject);
+                    nquad_str.append("\t");
+                    nquad_str.append(predicate->generate(n_map));
+                    nquad_str.append(n_map.get_provenance());
 
-                    int tab1_index = triple_str.find("\t");
-                    int tab2_index = triple_str.find("\t", tab1_index+1);
+                    int tab1_index = nquad_str.find("\t");
+                    int tab2_index = nquad_str.find("\t", tab1_index+1);
+                    int tab3_index = nquad_str.find("\t", tab2_index+1);
 
-                    //triple_lines.push_back(triple_st(triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1)));
-                    triple_st line (triple_str.substr(0, tab1_index), triple_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), triple_str.substr(tab2_index+1));
-                    // fo << line << " ." << endl;
-                    cout << line << " ." << endl;
+                    //nquad_lines.push_back(nquad_st(nquad_str.substr(0, tab1_index), nquad_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), nquad_str.substr(tab2_index+1)));
+                    nquad_st line (
+                        nquad_str.substr(0, tab1_index), 
+                        nquad_str.substr((tab1_index+1), (tab2_index-tab1_index-1)), 
+                        nquad_str.substr((tab2_index+1), (tab3_index-tab2_index-1)), 
+                        nquad_str.substr(tab3_index+1)
+                    );
+                    fo << line << " . " << endl;
+                    // cout << line << " ." << endl;
                 }
-                // fo.close();
+                fo.close();
             }
         }
     }
 }
 
-void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir){
+void resource_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map){
     unsigned int max_count = (id_cursor_map.find(_type_prefix))->second;
     for (unsigned int id=0; id<max_count; id++){
-        resource_m_t::process_type_restrictions_one(n_map, t_map, id, output_dir);
+        resource_m_t::process_type_restrictions_one(n_map, t_map, id);
     }
 }
 
@@ -788,9 +984,18 @@ string namespace_map::lookup (const string & alias) const{
     if (f_it!=_index.end()){
         return f_it->second;
     } else {
-        cerr<<"[namespace_map::lookup()] Error: alias does not exist..."<<"\n";
+        cerr<<"[namespace_map::lookup(" << alias << ")] Error: alias does not exist..."<<"\n";
         exit(0);
     }
+}
+
+string namespace_map::lookup_prefix(const string & prefix_longform) const {
+    for (map<string, string>::const_iterator itr = _index.begin(); itr != _index.end(); itr++ ){
+        if (prefix_longform.compare(itr->second) == 0){
+            return itr->first;
+        }
+    }
+    return "";
 }
 
 string namespace_map::replace (const string & content) const{
@@ -816,6 +1021,26 @@ string namespace_map::get_suffix(const string & content) const {
     } else {
         return content;
     }
+}
+
+string namespace_map::get_localized_name(const string & content) const {
+    unsigned int pos = content.find_first_of(':');
+    if (pos!=string::npos){
+        string suffix = content.substr(pos+1);
+        string result = lookup("__provenance");
+        result.append(suffix);
+        return result;
+    } else {
+        return content;
+    }
+}
+
+string namespace_map::get_provenance() const {
+    string result = "";
+    result.append("<");
+    result.append(lookup("__provenance"));
+    result.append(">");
+    return result;
 }
 
 void association_m_t::init (string subject_type, string predicate, string object_type){
@@ -893,7 +1118,7 @@ association_m_t::~association_m_t (){
     delete _object_type_restriction;
 }
 
-void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir){
+void association_m_t::generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -935,7 +1160,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
             }
 
             string candidateSubject = "";
-            candidateSubject.append(n_map.replace(_subject_type));
+            candidateSubject.append(n_map.get_localized_name(_subject_type));
             candidateSubject.append(boost::lexical_cast<string>(left_id));
             generateCondExist = (resource_gen_log.find(candidateSubject) != resource_gen_log.end());
 
@@ -961,8 +1186,9 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                     break;
                 }
             }
-            
+
             if (generateCond) {
+
                 left_mapped_instances.insert(left_id); 
 
                 unsigned int right_size = _right_cardinality;
@@ -988,21 +1214,21 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                         string subject(""), predicate (""), object(""), triple ("");                       
                 
                         // FIXME:: You need to add replace-command...
-                        subject.append(n_map.replace(_subject_type));
+                        subject.append(n_map.get_localized_name(_subject_type));
                         subject.append(boost::lexical_cast<string>(left_id));
 
                         // If the subject is not yet printed, print it once
                         if (resource_gen_log.find(subject) == resource_gen_log.end()) {
-                            resource_map.find(_subject_type)->second->generate_one(n_map, left_id, output_dir);
+                            resource_map.find(_subject_type)->second->generate_one(n_map, left_id, resource_gen_log);
                             resource_gen_log.insert(subject);
                         }
 
-                        object.append(n_map.replace(_object_type));
+                        object.append(n_map.get_localized_name(_object_type));
                         object.append(boost::lexical_cast<string>(right_id));
 
                         // If the object is not yet printed, print it once
                         if (resource_gen_log.find(object) == resource_gen_log.end()) {
-                            resource_map.find(_object_type)->second->generate_one(n_map, right_id, output_dir);
+                            resource_map.find(_object_type)->second->generate_one(n_map, right_id, resource_gen_log);
                             resource_gen_log.insert(object);
                         }
 
@@ -1021,17 +1247,17 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
                         object_str.append(object);
                         object_str.append(">");
 
-                        // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_subject_type) % n_map.get_suffix(_subject_type) % boost::lexical_cast<string>(left_id)));
-                        // boost::filesystem::create_directories(fn.parent_path());
-                        // ofstream fo;
-                        // fo.open(fn.string(), fstream::app);
+                        boost::filesystem::path fn (get_output_file(n_map.lookup("__output_dir"), n_map, _subject_type, left_id, false));
+                        boost::filesystem::create_directories(fn.parent_path());
+                        ofstream fo;
+                        fo.open(fn.string(), fstream::app);
 
-                        //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
-                        triple_st line (subject_str, predicate_str, object_str);
-                        // fo << line << " ." << endl;
-                        cout << line << " ." << endl;
+                        //nquad_lines.push_back(nquad_st(subject_str, predicate_str, object_str));
+                        nquad_st line (subject_str, predicate_str, object_str, n_map.get_provenance());
+                        fo << line << " . " << endl;
+                        // cout << line << " ." << endl;
 
-                        // fo.close();
+                        fo.close();
 
                         // Save type assertions...
                         if (predicate.compare("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")==0){
@@ -1056,7 +1282,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
     }
 }
 
-void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir){
+void association_m_t::process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log){
     if (id_cursor_map.find(_subject_type)==id_cursor_map.end()){
         cerr<<"[association_m_t::parse()] Error: association cannot be defined over undefined resource '"<<_subject_type<<"'..."<<"\n";
         exit(0);
@@ -1071,12 +1297,12 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
         unsigned int left_instance_count = id_cursor_map.find(_subject_type)->second;
         vector<string> * restricted_right_instances = NULL;
         if (_object_type_restriction!=NULL){
-            restricted_right_instances = t_map.get_instances(n_map.replace(_object_type), n_map.replace(*_object_type_restriction));
+            restricted_right_instances = t_map.get_instances(n_map.get_localized_name(_object_type), n_map.get_localized_name(*_object_type_restriction));
         } else {
             restricted_right_instances = new vector<string>();
             unsigned int right_instance_count = id_cursor_map.find(_object_type)->second;
             for (unsigned int right_id=0; right_id<right_instance_count; right_id++){
-                string instance = n_map.replace(_object_type);
+                string instance = n_map.get_localized_name(_object_type);
                 instance.append(boost::lexical_cast<string>(right_id));
                 restricted_right_instances->push_back(instance);
             }
@@ -1109,7 +1335,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                 }
 
                 string subject="";
-                subject.append(n_map.replace(_subject_type));
+                subject.append(n_map.get_localized_name(_subject_type));
                 subject.append(boost::lexical_cast<string>(left_id));
                 generateCondExist = (resource_gen_log.find(subject) != resource_gen_log.end());
 
@@ -1136,7 +1362,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                     }
                 }
 
-                if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.replace(*_subject_type_restriction))){
+                if (_subject_type_restriction==NULL || t_map.instanceof(subject, n_map.get_localized_name(*_subject_type_restriction))){
                                         
                     if ( generateCond ){
 
@@ -1174,7 +1400,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
 
                                 // If the object is not yet printed, print it once
                                 if (resource_gen_log.find(subject) == resource_gen_log.end()){
-                                    resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id, output_dir);
+                                    resource_map.find(_subject_type)->second->process_type_restrictions_one(n_map, t_map, left_id);
                                     resource_gen_log.insert(subject);
                                 }
 
@@ -1188,20 +1414,20 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
                                 
                                 // If the object is not yet printed, print it once
                                 if (resource_gen_log.find(object) == resource_gen_log.end()) {
-                                    resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index, output_dir);
+                                    resource_map.find(_object_type)->second->process_type_restrictions_one(n_map, t_map, right_index);
                                     resource_gen_log.insert(object);
                                 }
 
-                                // boost::filesystem::path fn (boost::str(boost::format("%1%/%2%/%3%%4%.nt") % output_dir.string() % n_map.get_suffix(_subject_type) % n_map.get_suffix(_subject_type) % boost::lexical_cast<string>(left_id)));
-                                // boost::filesystem::create_directories(fn.parent_path());
-                                // ofstream fo;
-                                // fo.open(fn.string(), fstream::app);
+                                boost::filesystem::path fn (get_output_file(n_map.lookup("__output_dir"), n_map, _subject_type, left_id, false));
+                                boost::filesystem::create_directories(fn.parent_path());
+                                ofstream fo;
+                                fo.open(fn.string(), fstream::app);
 
-                                //triple_lines.push_back(triple_st(subject_str, predicate_str, object_str));
-                                triple_st line (subject_str, predicate_str, object_str);
-                                // fo << line << " ." << endl;
-                                cout << line << " ." << endl;
-                                // fo.close();
+                                //nquad_lines.push_back(nquad_st(subject_str, predicate_str, object_str));
+                                nquad_st line (subject_str, predicate_str, object_str, n_map.get_provenance());
+                                fo << line << " . " << endl;
+                                // cout << line << " ." << endl;
+                                fo.close();
                             }
                         }
                     }
@@ -1955,12 +2181,6 @@ model::model(const char * filename){
     parse(filename);
 }
 
-model::model(const char * filename, const boost::filesystem::path & output_dir){
-    _output_dir = output_dir;
-    srand (time(NULL));
-    parse(filename);
-}
-
 model::~model(){
     for (vector<resource_m_t*>::iterator itr=_resource_array.begin(); itr!=_resource_array.end(); itr++){
         delete *itr;
@@ -1977,7 +2197,7 @@ void model::generate (int scale_factor){
         for (vector<resource_m_t*>::iterator itr2=_resource_array.begin(); itr2!=_resource_array.end(); itr2++){
             resource_m_t * resource = *itr2;
             if (i==0 || resource->_scalable){
-                resource->generate(_namespace_map, _id_cursor_map, _output_dir);
+                resource->generate(_namespace_map, _id_cursor_map);
             }
         }
     }
@@ -1986,21 +2206,21 @@ void model::generate (int scale_factor){
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->generate(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log, _output_dir);
+        association->generate(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
     }
 
     boost::posix_time::ptime t3 (bpt::microsec_clock::universal_time());
 
     for (vector<resource_m_t*>::iterator itr1=_resource_array.begin(); itr1!=_resource_array.end(); itr1++){
         resource_m_t * resource = *itr1;
-        resource->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _output_dir);
+        resource->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map);
     }
 
     boost::posix_time::ptime t4 (bpt::microsec_clock::universal_time());
 
     for (vector<association_m_t*>::iterator itr1=_association_array.begin(); itr1!=_association_array.end(); itr1++){
         association_m_t * association = *itr1;
-        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log, _output_dir);
+        association->process_type_restrictions(_namespace_map, _type_map, _id_cursor_map, _resource_map, _resource_gen_log);
     }
 
     boost::posix_time::ptime t5 (bpt::microsec_clock::universal_time());
@@ -2011,14 +2231,14 @@ void model::generate (int scale_factor){
     //cerr << "[t4--t5]" << " " << (t5-t4).total_microseconds() << "\n";
 }
 
-void model::compute_statistics (const vector<triple_st> & triples){
+void model::compute_statistics (const vector<nquad_st> & triples){
     vector<statistics_m_t*> statistics_array;
     for (vector<string>::iterator itr=_statistics_lines.begin(); itr!=_statistics_lines.end(); itr++){
         statistics_m_t * statistics = statistics_m_t::parse(this, *itr);
         statistics_array.push_back(statistics);
     }
     if (!statistics_array.empty()){
-        for (vector<triple_st>::const_iterator itr1=triples.begin(); itr1!=triples.end(); itr1++){
+        for (vector<nquad_st>::const_iterator itr1=triples.begin(); itr1!=triples.end(); itr1++){
             for (vector<statistics_m_t*>::iterator itr2=statistics_array.begin(); itr2!=statistics_array.end(); itr2++){
                 statistics_m_t * statistics = *itr2;
                 statistics->collect(this, itr1->_subject, itr1->_predicate, itr1->_object);
@@ -2606,37 +2826,37 @@ int main(int argc, const char* argv[]) {
             return 0;
         } else if (argc==6 && argv[1][0]=='-' && argv[1][1]=='s'){
             cur_model.load("saved.txt");
-            vector<triple_st> triple_array = triple_st::parse_file(argv[3]);
+            vector<nquad_st> nquad_array = nquad_st::parse_file(argv[3]);
             int maxQSize = boost::lexical_cast<int>(argv[4]);
             int qCount = boost::lexical_cast<int>(argv[5]);
-            statistics stat (&cur_model, triple_array, maxQSize, qCount, 1, false, false);
+            statistics stat (&cur_model, nquad_array, maxQSize, qCount, 1, false, false);
             dictionary::destroy_instance();
             return 0;
         } else if (argc==7 && argv[1][0]=='-' && argv[1][1]=='s'){
             cur_model.load("saved.txt");
-            vector<triple_st> triple_array = triple_st::parse_file(argv[3]);
+            vector<nquad_st> nquad_array = nquad_st::parse_file(argv[3]);
             int maxQSize = boost::lexical_cast<int>(argv[4]);
             int qCount = boost::lexical_cast<int>(argv[5]);
             int constCount = boost::lexical_cast<int>(argv[6]);
-            statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, false, false);
+            statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, false, false);
             dictionary::destroy_instance();
             return 0;
         } else if (argc==8 && argv[1][0]=='-' && argv[1][1]=='s'){
             cur_model.load("saved.txt");
-            vector<triple_st> triple_array = triple_st::parse_file(argv[3]);
+            vector<nquad_st> nquad_array = nquad_st::parse_file(argv[3]);
             int maxQSize = boost::lexical_cast<int>(argv[4]);
             int qCount = boost::lexical_cast<int>(argv[5]);
             int constCount = boost::lexical_cast<int>(argv[6]);
-            statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[7][0]=='t', false);
+            statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, argv[7][0]=='t', false);
             dictionary::destroy_instance();
             return 0;
         } else if (argc==9 && argv[1][0]=='-' && argv[1][1]=='s'){
             cur_model.load("saved.txt");
-            vector<triple_st> triple_array = triple_st::parse_file(argv[3]);
+            vector<nquad_st> nquad_array = nquad_st::parse_file(argv[3]);
             int maxQSize = boost::lexical_cast<int>(argv[4]);
             int qCount = boost::lexical_cast<int>(argv[5]);
             int constCount = boost::lexical_cast<int>(argv[6]);
-            statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[7][0]=='t', argv[8][0]=='t');
+            statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, argv[7][0]=='t', argv[8][0]=='t');
             dictionary::destroy_instance();
             return 0;
         } else if (argc==2 && argv[1][0]=='-' && argv[1][1]=='x'){
@@ -2737,37 +2957,37 @@ int main(int argc, const char* argv[]) {
 //             return 0;
 //         } else if (argc==7 && argv[1][0]=='-' && argv[1][1]=='s'){
 //             cur_model.load("saved.txt");
-//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             vector<nquad_st> nquad_array = nquad_st::parse_file(argv[4]);
 //             int maxQSize = boost::lexical_cast<int>(argv[5]);
 //             int qCount = boost::lexical_cast<int>(argv[6]);
-//             statistics stat (&cur_model, triple_array, maxQSize, qCount, 1, false, false);
+//             statistics stat (&cur_model, nquad_array, maxQSize, qCount, 1, false, false);
 //             dictionary::destroy_instance();
 //             return 0;
 //         } else if (argc==8 && argv[1][0]=='-' && argv[1][1]=='s'){
 //             cur_model.load("saved.txt");
-//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             vector<nquad_st> nquad_array = nquad_st::parse_file(argv[4]);
 //             int maxQSize = boost::lexical_cast<int>(argv[5]);
 //             int qCount = boost::lexical_cast<int>(argv[6]);
 //             int constCount = boost::lexical_cast<int>(argv[7]);
-//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, false, false);
+//             statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, false, false);
 //             dictionary::destroy_instance();
 //             return 0;
 //         } else if (argc==9 && argv[1][0]=='-' && argv[1][1]=='s'){
 //             cur_model.load("saved.txt");
-//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             vector<nquad_st> nquad_array = nquad_st::parse_file(argv[4]);
 //             int maxQSize = boost::lexical_cast<int>(argv[5]);
 //             int qCount = boost::lexical_cast<int>(argv[6]);
 //             int constCount = boost::lexical_cast<int>(argv[7]);
-//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[8][0]=='t', false);
+//             statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, argv[8][0]=='t', false);
 //             dictionary::destroy_instance();
 //             return 0;
 //         } else if (argc==10 && argv[1][0]=='-' && argv[1][1]=='s'){
 //             cur_model.load("saved.txt");
-//             vector<triple_st> triple_array = triple_st::parse_file(argv[4]);
+//             vector<nquad_st> nquad_array = nquad_st::parse_file(argv[4]);
 //             int maxQSize = boost::lexical_cast<int>(argv[5]);
 //             int qCount = boost::lexical_cast<int>(argv[6]);
 //             int constCount = boost::lexical_cast<int>(argv[7]);
-//             statistics stat (&cur_model, triple_array, maxQSize, qCount, constCount, argv[8][0]=='t', argv[9][0]=='t');
+//             statistics stat (&cur_model, nquad_array, maxQSize, qCount, constCount, argv[8][0]=='t', argv[9][0]=='t');
 //             dictionary::destroy_instance();
 //             return 0;
 //         } else if (argc==3 && argv[1][0]=='-' && argv[1][1]=='x'){

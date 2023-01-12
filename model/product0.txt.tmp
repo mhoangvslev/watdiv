@@ -1,0 +1,119 @@
+#namespace	bsbm=http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/
+#namespace	rdfs=http://www.w3.org/2000/01/rdf-schema#
+#namespace	rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#
+#namespace	dc=http://purl.org/dc/elements/1.1/
+#namespace  __provenance=http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/
+#namespace  __output_org=fragmented
+#namespace  __output_dir=/GDD/watdiv/model/product
+
+// ===== ENTITIES & LITERAL PROPERTIES ===== //
+
+// ----- Producer ----- //
+<type> bsbm:Producer 45
+
+<pgroup> 1.0
+#predicate rdfs:label string
+</pgroup>
+
+<pgroup> 1.0
+#predicate rdfs:comment string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:country country
+</pgroup>
+
+</type>
+
+// ----- Product ----- //
+
+<type> bsbm:Product 1000
+
+<pgroup> 1.0
+#predicate rdfs:label string
+</pgroup>
+
+<pgroup> 1.0
+#predicate rdfs:comment string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyTextual1 string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyTextual2 string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyTextual3 string
+</pgroup>
+
+<pgroup> 0.7
+#predicate bsbm:productPropertyTextual4 string
+</pgroup>
+
+<pgroup> 0.8
+#predicate bsbm:productPropertyTextual5 string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyNumeric1 integer 1 2000 normal
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyNumeric2 integer 1 2000 normal
+</pgroup>
+</type>
+
+<pgroup> 1.0
+#predicate bsbm:productPropertyNumeric3 integer 1 2000 normal
+</pgroup>
+</type>
+
+<pgroup> 0.7
+#predicate bsbm:productPropertyNumeric4 integer 1 2000 normal
+</pgroup>
+
+<pgroup> 0.8
+#predicate bsbm:productPropertyNumeric5 integer 1 2000 normal
+</pgroup>
+
+</type>
+
+// ----- ProductFeature ----- //
+<type> bsbm:ProductFeature 50
+
+<pgroup> 1.0
+#predicate rdfs:label string
+</pgroup>
+
+<pgroup> 1.0
+#predicate rdfs:comment string
+</pgroup>
+
+</type>
+
+// ----- ProductType ----- //
+<type> bsbm:ProductType 1554
+
+<pgroup> 1.0
+#predicate rdfs:label string
+</pgroup>
+
+<pgroup> 1.0
+#predicate rdfs:comment string
+</pgroup>
+
+</type>
+
+// Every products have serveral product type than others
+#association bsbm:Product rdf:type bsbm:ProductType 2 1554 1.0 NORMAL
+
+// Every products have serveral product features
+#association bsbm:Product bsbm:productFeature bsbm:ProductFeature 2 50 1.0 NORMAL
+
+// Every product has a producer
+#association bsbm:Product bsbm:producer bsbm:Producer 2 1 1.0 NORMAL
+
+

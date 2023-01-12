@@ -54,26 +54,27 @@ namespace OPERATION_TYPES {
 // Forward declaration
 struct model;
 
-struct triple_st {
+struct nquad_st {
     string _subject;
     string _predicate;
     string _object;
+    string _source;
 
-    triple_st (const string & line);
-    triple_st (const string & subject, const string & predicate, const string & object);
-    bool operator== (const triple_st & rhs) const;
+    nquad_st (const string & line);
+    nquad_st (const string & subject, const string & predicate, const string & object, const string & source);
+    bool operator== (const nquad_st & rhs) const;
 
-    static vector<triple_st> parse_file (const char * filename);
+    static vector<nquad_st> parse_file (const char * filename);
 };
 
-ostream& operator<<(ostream& os, const triple_st & triple);
+ostream& operator<<(ostream& os, const nquad_st & quad);
 
 struct s_compare {
-    bool operator() (const triple_st & lhs, const triple_st & rhs) const;
+    bool operator() (const nquad_st & lhs, const nquad_st & rhs) const;
 };
 
 struct o_compare {
-    bool operator() (const triple_st & lhs, const triple_st & rhs) const;
+    bool operator() (const nquad_st & lhs, const nquad_st & rhs) const;
 };
 
 struct namespace_m_t {
@@ -95,6 +96,9 @@ class namespace_map {
         string lookup (const string & alias) const;
         string replace (const string & content) const;
         string get_suffix (const string & content) const;
+        string get_localized_name (const string & content) const;
+        string get_provenance () const;
+        string lookup_prefix(const string & prefix_longform) const;
 
         void to_str (vector<string> & lines) const;
     private:
@@ -162,10 +166,12 @@ struct resource_m_t {
     resource_m_t (const resource_m_t & rhs);
     ~resource_m_t ();
 
-    void generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir);
-    void generate_one (const namespace_map & n_map, const unsigned int id, const boost::filesystem::path & output_dir);
-    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const boost::filesystem::path & output_dir);
-    void process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, const unsigned int id, const boost::filesystem::path & output_dir);
+    void generate (const namespace_map & n_map, map<string, unsigned int> & id_cursor_map);
+    void generate_one (const namespace_map & n_map, const unsigned int & id, set<string> & resource_gen_log);
+    void generate_dependencies (const namespace_map & n_map, const string & type_prefix, const unsigned int & id, set<string> & resource_gen_log);
+
+    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map);
+    void process_type_restrictions_one (const namespace_map & n_map, const type_map & t_map, const unsigned int id);
 
     static resource_m_t * parse (const string & line);
 };
@@ -210,8 +216,8 @@ struct association_m_t {
     association_m_t (string subject_type, string predicate, string object_type, unsigned int left_cardinality, unsigned int right_cardinality, DISTRIBUTION_TYPES::enum_t left_distribution, DISTRIBUTION_TYPES::enum_t right_distribution, const string * subject_type_restriction, const string * object_type_restriction);
     ~association_m_t ();
 
-    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir);
-    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log, const boost::filesystem::path & output_dir);
+    void generate (const namespace_map & n_map, type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log);
+    void process_type_restrictions (const namespace_map & n_map, const type_map & t_map, const map<string, unsigned int> & id_cursor_map, const map<string, resource_m_t*> & resource_map, set<string> & resource_gen_log);
 
     static association_m_t * parse (const map<string, unsigned int> & id_cursor_map, const string & line);
 };
@@ -304,7 +310,6 @@ struct statistics_m_t {
     static statistics_m_t * parse (const model * mdl, const string & line);
 };
 struct model{
-    boost::filesystem::path     _output_dir;
     vector<resource_m_t*>       _resource_array;
     map<string, resource_m_t*>  _resource_map;
     set<string>                 _resource_gen_log;
@@ -315,13 +320,12 @@ struct model{
     type_map                    _type_map;
 
     model(const char * filename);
-    model(const char * filename, const boost::filesystem::path & output_dir);
     ~model();
 
     void parse (const char * filename);
 
     void generate (int scale_factor);
-    void compute_statistics (const vector<triple_st> & triples);
+    void compute_statistics (const vector<nquad_st> & triples);
 
     void load (const char * filename);
     void save (const char * filename) const;
