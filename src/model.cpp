@@ -500,7 +500,7 @@ string predicate_m_t::generate (const namespace_map & n_map){
         }
 
         case LITERAL_TYPES::DATE:{
-            result.append("^^<http://www.w3.org/2001/XMLSchema#dateType>");
+            result.append("^^<http://www.w3.org/2001/XMLSchema#dateTime>");
             break;
         }
 
