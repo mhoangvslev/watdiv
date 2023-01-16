@@ -2,6 +2,7 @@
 #include "model.h"
 #include "statistics.h"
 #include "volatility_gen.h"
+#include "tqdm.hpp"
 
 #include <chrono>
 #include <fstream>
@@ -1138,7 +1139,7 @@ void association_m_t::generate (const namespace_map & n_map, type_map & t_map, c
 
         boost::posix_time::ptime t1 (bpt::microsec_clock::universal_time());
 
-        for (unsigned int i=0; i<left_instance_count; i++){
+        for (unsigned int i: tq::trange(left_instance_count)){
             
             unsigned int left_id = i;
             bool generateCondIndp = false;
@@ -1313,7 +1314,7 @@ void association_m_t::process_type_restrictions (const namespace_map & n_map, co
             set<string> right_mapped_instances;
             set<unsigned int> left_mapped_instances;
 
-            for (unsigned int i=0; i<left_instance_count; i++){
+            for (unsigned int i: tq::trange(left_instance_count)){
 
                 unsigned int left_id = i;
                 bool generateCondIndp = false;

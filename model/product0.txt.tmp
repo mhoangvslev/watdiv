@@ -27,7 +27,7 @@
 
 // ----- Product ----- //
 
-<type> bsbm:Product 1000
+<type> bsbm:Product 2000
 
 <pgroup> 1.0
 #predicate rdfs:label string

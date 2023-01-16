@@ -12,7 +12,7 @@ LD = g++
 WINDRES = windres
 
 INC =  -Iinclude -I$(BOOST_HOME)/include
-CFLAGS = -std=c++0x -Wall
+CFLAGS = -std=c++17 -Wall
 RESINC = 
 LIBDIR =  -L$(BOOST_HOME)/lib
 #LIB =  $(BOOST_HOME)/lib/libboost_date_time.a
@@ -20,7 +20,7 @@ LIB = -lboost_date_time -lboost_filesystem -lboost_system -lboost_regex
 LDFLAGS = 
 
 INC_DEBUG =  $(INC)
-CFLAGS_DEBUG =  $(CFLAGS) -std=c++0x -g -w
+CFLAGS_DEBUG =  $(CFLAGS) -std=c++17 -g -w
 RESINC_DEBUG =  $(RESINC)
 RCFLAGS_DEBUG =  $(RCFLAGS)
 LIBDIR_DEBUG =  $(LIBDIR)
@@ -31,7 +31,7 @@ DEP_DEBUG =
 OUT_DEBUG = bin/Debug/watdiv
 
 INC_RELEASE =  $(INC)
-CFLAGS_RELEASE =  $(CFLAGS) -O3 -std=c++0x -w
+CFLAGS_RELEASE =  $(CFLAGS) -O3 -std=c++17 -w
 RESINC_RELEASE =  $(RESINC)
 RCFLAGS_RELEASE =  $(RCFLAGS)
 LIBDIR_RELEASE =  $(LIBDIR)
