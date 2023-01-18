@@ -716,15 +716,24 @@ void resource_m_t::generate_dependencies(const namespace_map & n_map, const stri
             string localized_subject = localize_item(line.substr(0, tab1_index), n_map);
             string dep_predicate = line.substr((tab1_index+1), (tab2_index-tab1_index-1)); 
             string dep_object = line.substr((tab2_index+1), (tab3_index-tab2_index-1));
-            string localized_object = (dep_predicate.find("sameAs") != string::npos) ? dep_object : localize_item(dep_object, n_map);
+
+            string prefix, suffix;
+            split_URIRef(dep_object, boost::regex("#|/"), prefix, suffix);
+
+            string localized_object = localize_item(dep_object, n_map);
+            if (dep_predicate.find("sameAs") != string::npos) {
+                localized_object = dep_object;
+            } else if (dep_predicate.find("#type") != string::npos && boost::starts_with(prefix, "http")) {
+                boost::smatch heritage_object_matched;
+                if (boost::regex_match(suffix, heritage_object_matched, boost::regex("([A-Za-z_]+)"))) {
+                    localized_object = dep_object;
+                }
+            }
 
             nquad_st quad (localized_subject, dep_predicate, localized_object, provenance);
             fo << quad << " . " << endl;
 
             // Recursively generate subsequence dependencies
-            string prefix, suffix;
-            split_URIRef(dep_object, boost::regex("#|/"), prefix, suffix);
-
             if (prefix.compare("") == 0 && suffix.compare("") == 0){
                 continue;
             }

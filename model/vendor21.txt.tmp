@@ -4,10 +4,11 @@
 #namespace	rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#
 #namespace	dc=http://purl.org/dc/elements/1.1/
 #namespace  foaf=http://xmlns.com/foaf/0.1/
+#namespace  __provenance=http://www.vendor23.fr/
 #namespace  __output_org=monolithic
-#namespace  __output_dir=experiments/bsbm/model/exported
+#namespace  __output_dir=/GDD/watdiv/model/vendor
 #namespace  __output_file=vendor23
-#namespace  __output_dep=experiments/bsbm/model/tmp/product
+#namespace  __output_dep=/GDD/watdiv/model/product
 #namespace  __output_dep_org=fragmented
 
 // ===== ENTITIES & LITERAL PROPERTIES ===== //
