@@ -666,7 +666,7 @@ string localize_item(const string & URIRef, const namespace_map & n_map) {
     if (prefix.compare("") == 0 && suffix.compare("") == 0){
         return URIRef;
         
-    } else if (boost::starts_with(prefix, "http") or n_map.lookup_prefix(prefix).compare("") == 0){
+    } else if (boost::starts_with(prefix, "http")){
         string result = "";
         result.append("<");
         result.append(n_map.lookup("__provenance"));
@@ -696,6 +696,10 @@ void resource_m_t::generate_dependencies(const namespace_map & n_map, const stri
     string dependency_prefix = "__output_dep";
     string dependency_dir = n_map.lookup(dependency_prefix);
 
+    string rename_exception_predicates = n_map.lookup("__output_dep_rename_exception_predicates");
+    vector<string> rename_exception_predicates_list;
+    boost::split(rename_exception_predicates_list, rename_exception_predicates, boost::is_any_of(";"));
+
     boost::filesystem::path dependency_file (get_output_file(dependency_dir, n_map, type_prefix, id, true));
 
     if (boost::filesystem::exists(dependency_file)) {
@@ -721,13 +725,15 @@ void resource_m_t::generate_dependencies(const namespace_map & n_map, const stri
             split_URIRef(dep_object, boost::regex("#|/"), prefix, suffix);
 
             string localized_object = localize_item(dep_object, n_map);
-            if (dep_predicate.find("sameAs") != string::npos) {
+            if (dep_predicate.compare("<http://www.w3.org/2002/07/owl#sameAs>") == 0) {
                 localized_object = dep_object;
-            } else if (dep_predicate.find("#type") != string::npos && boost::starts_with(prefix, "http")) {
+            } else if (dep_predicate.compare("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") == 0) {
                 boost::smatch heritage_object_matched;
                 if (boost::regex_match(suffix, heritage_object_matched, boost::regex("([A-Za-z_]+)"))) {
                     localized_object = dep_object;
                 }
+            } else if ( find(rename_exception_predicates_list.begin(), rename_exception_predicates_list.end(), dep_predicate) != rename_exception_predicates_list.cend() ) {
+                localized_object = dep_object;
             }
 
             nquad_st quad (localized_subject, dep_predicate, localized_object, provenance);
