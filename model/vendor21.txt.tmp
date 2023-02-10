@@ -25,11 +25,11 @@
 <type> bsbm:Vendor 1
 
 <pgroup> 1.0
-#predicate rdfs:label string
+#predicate rdfs:label string10
 </pgroup>
 
 <pgroup> 1.0
-#predicate rdfs:comment string
+#predicate rdfs:comment string30
 </pgroup>
 
 <pgroup> 1.0
@@ -37,7 +37,7 @@
 </pgroup>
 
 <pgroup> 1.0
-#predicate foaf:homepage string
+#predicate foaf:homepage string3
 </pgroup>
 
 </type>
@@ -62,7 +62,12 @@
 </pgroup>
 
 <pgroup> 1.0
-#predicate bsbm:offerWebpage string
+#predicate bsbm:offerWebpage string5
+</pgroup>
+
+// (today - 97 days) to today
+<pgroup> 1.0
+#predicate bsbm:publishDate date 2008-02-13 2008-05-20
 </pgroup>
 
 </type>

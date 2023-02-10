@@ -344,9 +344,11 @@ void type_map::to_str (vector<string> & lines) const{
     }
 }
 
-void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type){
+void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type, const int & var_length){
     _label = label;
     _literal_type = literal_type;
+    _var_length = var_length;
+
     switch (_literal_type){
         case LITERAL_TYPES::FLOAT:
         case LITERAL_TYPES::INTEGER:{
@@ -372,18 +374,18 @@ void predicate_m_t::init(string label, LITERAL_TYPES::enum_t literal_type){
     _distribution_type = DISTRIBUTION_TYPES::UNIFORM;
 }
 
-predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type){
-    init(label, literal_type);
+predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length){
+    init(label, literal_type, var_length);
 }
 
-predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, string range_min, string range_max){
-    init(label, literal_type);
+predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length, string range_min, string range_max){
+    init(label, literal_type, var_length);
     _range_min = range_min;
     _range_max = range_max;
 }
 
-predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, string range_min, string range_max, DISTRIBUTION_TYPES::enum_t distribution_type){
-    init(label, literal_type);
+predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length, string range_min, string range_max, DISTRIBUTION_TYPES::enum_t distribution_type){
+    init(label, literal_type, var_length);
     _range_min = range_min;
     _range_max = range_max;
     _distribution_type = distribution_type;
@@ -392,6 +394,7 @@ predicate_m_t::predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, 
 predicate_m_t::predicate_m_t (const predicate_m_t & rhs){
     _label = rhs._label;
     _literal_type = rhs._literal_type;
+    _var_length = rhs._var_length;
     _range_min = rhs._range_min;
     _range_max = rhs._range_max;
     _distribution_type = rhs._distribution_type;
@@ -403,6 +406,7 @@ predicate_m_t * predicate_m_t::parse (const string & line){
     string range_min;
     string range_max;
     DISTRIBUTION_TYPES::enum_t distribution_type = DISTRIBUTION_TYPES::UNDEFINED;
+    int var_length = 0;
 
     stringstream parser(line);
     int index = 0;
@@ -426,8 +430,15 @@ predicate_m_t * predicate_m_t::parse (const string & line){
                     literal_type = LITERAL_TYPES::INTEGER;
                 } else if (token.compare("float")==0 || token.compare("FLOAT")==0){
                     literal_type = LITERAL_TYPES::FLOAT;
-                } else if (token.compare("string")==0 || token.compare("STRING")==0){
+                } //else if (token.compare("string")==0 || token.compare("STRING")==0){
+                    else if (boost::starts_with(token, "string") || boost::starts_with(token, "STRING")) {
+                    // TODO: Integrate string length into type: string50
                     literal_type = LITERAL_TYPES::STRING;
+                    var_length = MAX_LITERAL_WORDS;
+                    boost::smatch string_length_search;
+                    if (boost::regex_match(token, string_length_search, boost::regex("(string|STRING)(\\d+)"))) {
+                        var_length = boost::lexical_cast<int>(string_length_search[2]);
+                    }
                 } else if (token.compare("name")==0 || token.compare("NAME")==0){
                     literal_type = LITERAL_TYPES::NAME;
                 } else if (token.compare("country")==0 || token.compare("COUNTRY")==0){
@@ -460,20 +471,19 @@ predicate_m_t * predicate_m_t::parse (const string & line){
     }
 
     if (index==3){
-        return new predicate_m_t(label, literal_type);
+        return new predicate_m_t(label, literal_type, var_length);
     } else if (index==5){
-        return new predicate_m_t(label, literal_type, range_min, range_max);
+        return new predicate_m_t(label, literal_type, var_length, range_min, range_max);
     } else if (index==6){
-        return new predicate_m_t(label, literal_type, range_min, range_max, distribution_type);
+        return new predicate_m_t(label, literal_type, var_length, range_min, range_max, distribution_type);
     } else {
         cerr<<"[predicate_m_t::parse()]\tExpecting 2, 3 or 5 arguments..."<<"\n";
         exit(0);
     }
 }
 
-string predicate_m_t::generate (const namespace_map & n_map){
+string predicate_m_t::format_literal(const namespace_map & n_map, const string & literal){
     string result = "";
-    string literal = model::generate_literal(_literal_type, _distribution_type, _range_min, _range_max);
     result.append("<");
     result.append(n_map.replace(_label));
     result.append(">");
@@ -512,8 +522,12 @@ string predicate_m_t::generate (const namespace_map & n_map){
             break;
         }
     }
-    
     return result;
+}
+
+string predicate_m_t::generate (const namespace_map & n_map){
+    string literal = model::generate_literal(_literal_type, _distribution_type, _var_length, _range_min, _range_max);
+    return format_literal(n_map, literal);
 }
 
 predicate_group_m_t::predicate_group_m_t (){
@@ -817,10 +831,12 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                 if (draw<=predicate_group->_gen_probability){
                     for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
                         predicate_m_t * predicate = *itr3;
+                        string predicate_value = predicate->generate(n_map);
+
                         string nquad_str = "";
                         nquad_str.append(subject);
                         nquad_str.append("\t");
-                        nquad_str.append(predicate->generate(n_map));
+                        nquad_str.append(predicate_value);
                         nquad_str.append("\t");
                         nquad_str.append(n_map.get_provenance());
 
@@ -1706,7 +1722,7 @@ string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_te
 string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_template, unsigned int & instance_count){
     if (_is_literal_type){
         string result = "";
-        result.append(model::generate_literal(_literal_type, _distribution_type, _range_min, _range_max));
+        result.append(model::generate_literal(_literal_type, _distribution_type, _var_length, _range_min, _range_max));
         return result;
     } else {
         if (_type_restriction==NULL){
@@ -1805,6 +1821,7 @@ mapping_m_t * mapping_m_t::parse (const string & line){
     string range_min = "";
     string range_max = "";
     string distribution_name = "";
+    int var_length = 0;
 
     stringstream parser(line);
     int index = 0;
@@ -1827,8 +1844,15 @@ mapping_m_t * mapping_m_t::parse (const string & line){
                     literal_type = LITERAL_TYPES::INTEGER;
                 } else if (token.compare("float")==0 || token.compare("FLOAT")==0){
                     literal_type = LITERAL_TYPES::FLOAT;
-                } else if (token.compare("string")==0 || token.compare("STRING")==0){
+                } //else if (token.compare("string")==0 || token.compare("STRING")==0){
+                    else if (boost::starts_with(token, "string") || boost::starts_with(token, "STRING")) {
+                    // TODO: Integrate string length into type: string50
                     literal_type = LITERAL_TYPES::STRING;
+                    var_length = MAX_LITERAL_WORDS;
+                    boost::smatch string_length_search;
+                    if (boost::regex_match(token, string_length_search, boost::regex("(string|STRING)(\\d+)"))) {
+                        var_length = boost::lexical_cast<int>(string_length_search[2]);
+                    }
                 } else if (token.compare("name")==0 || token.compare("NAME")==0){
                     literal_type = LITERAL_TYPES::NAME;
                 } else if (token.compare("country")==0 || token.compare("COUNTRY")==0){
@@ -1874,35 +1898,50 @@ mapping_m_t * mapping_m_t::parse (const string & line){
     }
     if (is_literal_type){
         if (index==3){
-            return new mapping_m_t(var_name, literal_type);
+            mapping_m_t * result = new mapping_m_t(var_name, literal_type);
+            result->_var_length = var_length;
+            return result;
         } else if (index==4){
-            return new mapping_m_t(var_name, literal_type, distribution_type);
+            mapping_m_t * result = new mapping_m_t(var_name, literal_type, distribution_type);
+            result->_var_length = var_length;
+            return result;
         } else if (index==6){
-            return new mapping_m_t(var_name, literal_type, distribution_type, range_min, range_max);
+            mapping_m_t * result = new mapping_m_t(var_name, literal_type, distribution_type, range_min, range_max);
+            result->_var_length = var_length;
+            return result;
         }
     } else {
         if (type_restriction_exists){
             if (index==3){
-                return new mapping_m_t(var_name, resource_type, type_restriction);
+                mapping_m_t * result = new mapping_m_t(var_name, resource_type, type_restriction);
+                result->_var_length = var_length;
+                return result;
             } else if (index==4){
                 if (distribution_type==DISTRIBUTION_TYPES::DYNAMIC){
                     mapping_m_t * result = new mapping_m_t(var_name, resource_type, type_restriction, distribution_type);
                     result->_dynamic_model_name = distribution_name;
                     return result;
                 } else {
-                    return new mapping_m_t(var_name, resource_type, type_restriction, distribution_type);
+                    mapping_m_t * result = new mapping_m_t(var_name, resource_type, type_restriction, distribution_type);
+                    result->_var_length = var_length;
+                    return result;
                 }
             }
         } else {
             if (index==3){
-                return new mapping_m_t(var_name, resource_type);
+                mapping_m_t * result = new mapping_m_t(var_name, resource_type);
+                result->_var_length = var_length;
+                return result;
             } else if (index==4){
                 if (distribution_type==DISTRIBUTION_TYPES::DYNAMIC){
                     mapping_m_t * result = new mapping_m_t(var_name, resource_type, distribution_type);
                     result->_dynamic_model_name = distribution_name;
+                    result->_var_length = var_length;
                     return result;
                 } else {
-                    return new mapping_m_t(var_name, resource_type, distribution_type);
+                    mapping_m_t * result = new mapping_m_t(var_name, resource_type, distribution_type);
+                    result->_var_length = var_length;
+                    return result;
                 }
             }
         }
@@ -2321,7 +2360,7 @@ void model::parse (const char * filename){
     }
 }
 
-string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const string & range_min, const string & range_max){
+string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max){
     string literal = "";
     switch (literal_type){
         case LITERAL_TYPES::INTEGER:{
@@ -2360,7 +2399,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             offset = (offset>interval) ? interval : offset;
             literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::ENGLISH_WORDS, range.first + offset)));
             // Keep appending a few more words from the dictionary...
-            unsigned int wc = rand() % MAX_LITERAL_WORDS;
+            unsigned int wc = rand() % var_length;
             unsigned int dict_size = dictionary::get_instance()->word_count(DICTIONARY_TYPES::ENGLISH_WORDS);
             for (unsigned int index=0; index<wc; index++){
                 literal.append(" ");

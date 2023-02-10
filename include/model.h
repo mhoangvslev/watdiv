@@ -128,15 +128,17 @@ struct predicate_m_t {
     string                          _range_min;
     string                          _range_max;
     DISTRIBUTION_TYPES::enum_t      _distribution_type;
+    int                             _var_length;
 
-    void init (string label, LITERAL_TYPES::enum_t literal_type);
+    void init (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length);
 
-    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type);
-    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, string range_min, string range_max);
-    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, string range_min, string range_max, DISTRIBUTION_TYPES::enum_t distribution_type);
+    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length);
+    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length, string range_min, string range_max);
+    predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length, string range_min, string range_max, DISTRIBUTION_TYPES::enum_t distribution_type);
     predicate_m_t (const predicate_m_t & rhs);
 
     string generate (const namespace_map & n_map);
+    string format_literal(const namespace_map & n_map, const string & literal);
 
     static predicate_m_t * parse (const string & line);
 };
@@ -161,6 +163,7 @@ struct resource_m_t {
     string                          _type_prefix;
     unsigned int                    _scaling_coefficient;
     vector<predicate_group_m_t*>    _predicate_group_array;
+    map<int, string>                _publishDateCache;
 
     resource_m_t (bool scalable, string type_prefix, unsigned int scaling_coefficient);
     resource_m_t (const resource_m_t & rhs);
@@ -234,6 +237,7 @@ struct mapping_m_t {
     string                      _range_min;
     string                      _range_max;
     string                      _dynamic_model_name;
+    int                         _var_length;
 
     void init (const string & var_name, LITERAL_TYPES::enum_t literal_type);
     void init (const string & var_name, const string & resource_type);
@@ -330,7 +334,7 @@ struct model{
     void load (const char * filename);
     void save (const char * filename) const;
 
-    static string generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const string & range_min, const string & range_max);
+    static string generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max);
     // static double generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count=-1);
     // static double generate_zipfian (int item_count);
     // static void clear_zipfian_cache ();
