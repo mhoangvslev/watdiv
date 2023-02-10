@@ -32,6 +32,7 @@ namespace bpt = boost::posix_time;
 
 static unsigned int MAX_LOOP_COUNTER = 50;
 static int MAX_LITERAL_WORDS = 25;
+static string TODAY = "2008-05-20";
 
 static map<int,vector<double>*> zipfian_cache;
 
@@ -835,6 +836,8 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
 
                         if (_type_prefix.compare("bsbm:Offer") == 0){
 
+                            string key = "publishDate_" + boost::lexical_cast<string>(id);
+
                             if (predicate->_label.compare("bsbm:publishDate") == 0) {
                                 string publishDate = model::generate_literal(
                                     predicate->_literal_type, 
@@ -844,10 +847,10 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                     predicate->_range_max
                                 );
                                 predicate_value = predicate->format_literal(n_map, publishDate);
-                                _publishDateCache.insert(pair<int, string>(id, publishDate));
+                                _bsbm_data_cache.insert(pair<string, string>(key, publishDate));
 
                             } else if (predicate->_label.compare("bsbm:validFrom") == 0){
-                                string publishDate = _publishDateCache.find(id)->second;
+                                string publishDate = _bsbm_data_cache.find(key)->second;
                                 boost::posix_time::ptime min_time, max_time;
                                 locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
                         
@@ -870,7 +873,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 predicate_value = predicate->generate(n_map);
 
                             } else if (predicate->_label.compare("bsbm:validTo") == 0){
-                                string publishDate = _publishDateCache.find(id)->second;
+                                string publishDate = _bsbm_data_cache.find(key)->second;
 
                                 boost::posix_time::ptime min_time, max_time;
                                 locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
@@ -890,6 +893,27 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 
                                 predicate->_range_min = publishDate;
                                 predicate->_range_max = range_max;
+
+                                predicate_value = predicate->generate(n_map);
+                            }
+                        } else if (_type_prefix.compare("bsbm:Review") == 0) {
+                            string key = "reviewDate_" + boost::lexical_cast<string>(id);
+                            if (predicate->_label.compare("bsbm:reviewDate") == 0){
+                                string reviewDate = model::generate_literal(
+                                    predicate->_literal_type, 
+                                    predicate->_distribution_type, 
+                                    predicate->_var_length, 
+                                    predicate->_range_min, 
+                                    predicate->_range_max
+                                );
+                                predicate_value = predicate->format_literal(n_map, reviewDate);
+                                _bsbm_data_cache.insert(pair<string, string>(key, reviewDate));
+
+                            } else if (predicate->_label.compare("bsbm:publishDate")==0){
+                                // Randomly chosen from reviewDate to today
+                                string reviewDate = _bsbm_data_cache.find(key)->second;
+                                predicate->_range_min = reviewDate;
+                                predicate->_range_max = TODAY;
 
                                 predicate_value = predicate->generate(n_map);
                             }

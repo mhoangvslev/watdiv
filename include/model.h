@@ -163,7 +163,7 @@ struct resource_m_t {
     string                          _type_prefix;
     unsigned int                    _scaling_coefficient;
     vector<predicate_group_m_t*>    _predicate_group_array;
-    map<int, string>                _publishDateCache;
+    map<string, string>                _bsbm_data_cache;
 
     resource_m_t (bool scalable, string type_prefix, unsigned int scaling_coefficient);
     resource_m_t (const resource_m_t & rhs);

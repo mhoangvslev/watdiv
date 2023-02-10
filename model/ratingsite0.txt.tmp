@@ -1,0 +1,102 @@
+#namespace	bsbm=http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/
+#namespace	rdfs=http://www.w3.org/2000/01/rdf-schema#
+#namespace	rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#
+#namespace	dc=http://purl.org/dc/elements/1.1/
+#namespace  rev=http://purl.org/stuff/rev#
+#namespace  foaf=http://xmlns.com/foaf/0.1/
+#namespace  __provenance=http://www.ratingsite0.fr/
+#namespace  __output_org=monolithic
+#namespace  __output_dir=/GDD/watdiv/model/ratingsite
+#namespace  __output_file=ratingsite0
+#namespace  __output_dep=/GDD/watdiv/model/product
+#namespace  __output_dep_org=fragmented
+#namespace  __output_dep_rename_exception_predicates=<http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/country>;
+
+// ===== ENTITIES & LITERAL PROPERTIES ===== //
+
+// ----- Product ----- //
+
+<type> bsbm:Product 2000
+</type>
+
+// ----- RatingSite ----- //
+
+<type> bsbm:RatingSite 1
+
+<pgroup> 1.0
+#predicate rdfs:label string
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:country country
+</pgroup>
+
+</type>
+
+// ----- Person ----- //
+
+<type> bsbm:Person 20
+
+<pgroup> 1.0
+#predicate foaf:name name
+</pgroup>
+
+<pgroup> 1.0
+#predicate foaf:mbox_sha1sum integer
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:country country
+</pgroup>
+
+</type>
+
+// ----- Review ----- //
+<type> bsbm:Review 200
+
+<pgroup> 1.0
+#predicate bsbm:reviewDate date
+</pgroup>
+
+<pgroup> 1.0
+#predicate dc:title string
+</pgroup>
+
+<pgroup> 1.0
+#predicate rev:text string
+</pgroup>
+
+<pgroup> 0.7
+#predicate bsbm:rating1 integer 1 10 normal
+</pgroup>
+
+<pgroup> 0.7
+#predicate bsbm:rating2 integer 1 10 normal
+</pgroup>
+
+<pgroup> 0.7
+#predicate bsbm:rating3 integer 1 10 normal
+</pgroup>
+
+<pgroup> 0.7
+#predicate bsbm:rating4 integer 1 10 normal
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:publishDate date
+</pgroup>
+
+<pgroup> 1.0
+#predicate bsbm:reviewDate date 2007-01-01 2007-12-31
+</pgroup>
+
+</type>
+
+// Every bsbm:Review is related to [1] bsbm:RatingSite (drawn with a ZIPFIAN) with the probability 1.0 
+#association bsbm:Review dc:publisher bsbm:RatingSite 2 1 NORMAL NORMAL
+
+// Every generated bsbm:Review is related to [1] bsbm:Product (drawn with a ZIPFIAN) with the probability 1.0 
+#association1 bsbm:Review bsbm:reviewFor bsbm:Product 2 1 NORMAL NORMAL
+
+// Every generated existing bsbm:Review are related to [Many] bsbm:Person (drawn with a ZIPFIAN) with the probability 1.0 
+#association1 bsbm:Review rev:reviewer bsbm:Person 2 1 NORMAL NORMAL
