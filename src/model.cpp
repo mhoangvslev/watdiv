@@ -833,6 +833,68 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                         predicate_m_t * predicate = *itr3;
                         string predicate_value = predicate->generate(n_map);
 
+                        if (_type_prefix.compare("bsbm:Offer") == 0){
+
+                            if (predicate->_label.compare("bsbm:publishDate") == 0) {
+                                string publishDate = model::generate_literal(
+                                    predicate->_literal_type, 
+                                    predicate->_distribution_type, 
+                                    predicate->_var_length, 
+                                    predicate->_range_min, 
+                                    predicate->_range_max
+                                );
+                                predicate_value = predicate->format_literal(n_map, publishDate);
+                                _publishDateCache.insert(pair<int, string>(id, publishDate));
+
+                            } else if (predicate->_label.compare("bsbm:validFrom") == 0){
+                                string publishDate = _publishDateCache.find(id)->second;
+                                boost::posix_time::ptime min_time, max_time;
+                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+                        
+                                istringstream max_iss (publishDate);
+                                max_iss.imbue(format);
+                                max_iss>>max_time;
+
+                                long interval = 180;
+                                double r_value = generate_random(DISTRIBUTION_TYPES::UNIFORM, interval);
+                                long offset = round(r_value * interval);
+                                offset = (offset<0) ? 0 : offset;
+                                offset = (offset>interval) ? interval : offset;
+
+                                min_time = max_time - boost::gregorian::days(offset);
+                                string range_min = boost::gregorian::to_iso_extended_string(min_time.date());
+                                
+                                predicate->_range_min = range_min;
+                                predicate->_range_max = publishDate;
+
+                                predicate_value = predicate->generate(n_map);
+
+                            } else if (predicate->_label.compare("bsbm:validTo") == 0){
+                                string publishDate = _publishDateCache.find(id)->second;
+
+                                boost::posix_time::ptime min_time, max_time;
+                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+                        
+                                istringstream min_iss (publishDate);
+                                min_iss.imbue(format);
+                                min_iss>>min_time;
+
+                                long interval = 180-7;
+                                double r_value = generate_random(DISTRIBUTION_TYPES::UNIFORM, interval);
+                                long offset = round(r_value * interval);
+                                offset = (offset<0) ? 0 : offset;
+                                offset = (offset>interval) ? interval : offset;
+
+                                max_time = min_time + boost::gregorian::days(7 + offset);
+                                string range_max = boost::gregorian::to_iso_extended_string(max_time.date());
+                                
+                                predicate->_range_min = publishDate;
+                                predicate->_range_max = range_max;
+
+                                predicate_value = predicate->generate(n_map);
+                            }
+                        }
+
                         string nquad_str = "";
                         nquad_str.append(subject);
                         nquad_str.append("\t");
