@@ -137,8 +137,8 @@ struct predicate_m_t {
     predicate_m_t (string label, LITERAL_TYPES::enum_t literal_type, const int & var_length, string range_min, string range_max, DISTRIBUTION_TYPES::enum_t distribution_type);
     predicate_m_t (const predicate_m_t & rhs);
 
-    string generate (const namespace_map & n_map);
-    string format_literal(const namespace_map & n_map, const string & literal);
+    string generate (const string & type_prefix, const namespace_map & n_map);
+    string format_literal(const string & type_prefix, const namespace_map & n_map, const string & literal);
 
     static predicate_m_t * parse (const string & line);
 };
@@ -334,7 +334,7 @@ struct model{
     void load (const char * filename);
     void save (const char * filename) const;
 
-    static string generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max);
+    static string generate_literal (const string & type_prefix, LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max);
     // static double generate_random (DISTRIBUTION_TYPES::enum_t distribution_type, int item_count=-1);
     // static double generate_zipfian (int item_count);
     // static void clear_zipfian_cache ();

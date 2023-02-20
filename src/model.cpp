@@ -42,8 +42,14 @@ static boost::variate_generator<boost::mt19937, boost::normal_distribution<doubl
 
 static vector<string> countries {"US", "UK", "JP", "CN", "DE", "FR", "ES", "RU", "KR", "AT"};
 static vector<double> countries_weight {40, 10, 10, 10, 5, 5, 5, 5, 5, 5};
-static boost::random::discrete_distribution<int> BOOST_COUNTRY_DIST(countries_weight);
-static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> BOOST_COUNTRY_DIST_GEN(BOOST_RND_GEN, BOOST_COUNTRY_DIST);
+static boost::random::discrete_distribution<int> PRODUCER_BOOST_COUNTRY_DIST(countries_weight);
+static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> PRODUCER_BOOST_COUNTRY_DIST_GEN(BOOST_RND_GEN, PRODUCER_BOOST_COUNTRY_DIST);
+
+static boost::random::discrete_distribution<int> VENDOR_BOOST_COUNTRY_DIST(countries_weight);
+static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> VENDOR_BOOST_COUNTRY_DIST_GEN(BOOST_RND_GEN, VENDOR_BOOST_COUNTRY_DIST);
+
+static boost::random::discrete_distribution<int> PERSON_BOOST_COUNTRY_DIST(countries_weight);
+static boost::variate_generator<boost::mt19937, boost::random::discrete_distribution<int>> PERSON_BOOST_COUNTRY_DIST_GEN(BOOST_RND_GEN, PERSON_BOOST_COUNTRY_DIST);
 
 static vector<string> langtags {"en", "ja", "zh", "de", "fr", "es", "ru", "kr", "at"};
 static vector<double> langtags_weight {50, 10, 10, 5, 5, 5, 5, 5, 5};
@@ -431,8 +437,7 @@ predicate_m_t * predicate_m_t::parse (const string & line){
                     literal_type = LITERAL_TYPES::INTEGER;
                 } else if (token.compare("float")==0 || token.compare("FLOAT")==0){
                     literal_type = LITERAL_TYPES::FLOAT;
-                } //else if (token.compare("string")==0 || token.compare("STRING")==0){
-                    else if (boost::starts_with(token, "string") || boost::starts_with(token, "STRING")) {
+                } else if (boost::starts_with(token, "string") || boost::starts_with(token, "STRING")) {
                     // TODO: Integrate string length into type: string50
                     literal_type = LITERAL_TYPES::STRING;
                     var_length = MAX_LITERAL_WORDS;
@@ -440,8 +445,13 @@ predicate_m_t * predicate_m_t::parse (const string & line){
                     if (boost::regex_match(token, string_length_search, boost::regex("(string|STRING)(\\d+)"))) {
                         var_length = boost::lexical_cast<int>(string_length_search[2]);
                     }
-                } else if (token.compare("name")==0 || token.compare("NAME")==0){
+                } else if (boost::starts_with(token, "name") || boost::starts_with(token, "NAME")) {
                     literal_type = LITERAL_TYPES::NAME;
+                    var_length = 1;
+                    boost::smatch string_length_search;
+                    if (boost::regex_match(token, string_length_search, boost::regex("(name|NAME)(\\d+)"))) {
+                        var_length = boost::lexical_cast<int>(string_length_search[2]);
+                    }
                 } else if (token.compare("country")==0 || token.compare("COUNTRY")==0){
                     literal_type = LITERAL_TYPES::COUNTRY;
                 } else if (token.compare("date")==0 || token.compare("DATE")==0){
@@ -483,7 +493,7 @@ predicate_m_t * predicate_m_t::parse (const string & line){
     }
 }
 
-string predicate_m_t::format_literal(const namespace_map & n_map, const string & literal){
+string predicate_m_t::format_literal(const string & type_prefix, const namespace_map & n_map, const string & literal){
     string result = "";
     result.append("<");
     result.append(n_map.replace(_label));
@@ -515,20 +525,32 @@ string predicate_m_t::format_literal(const namespace_map & n_map, const string &
             result.append("^^<http://www.w3.org/2001/XMLSchema#dateTime>");
             break;
         }
+        
+        // Langtag for every string
+        // case LITERAL_TYPES::STRING: {
+        //     string langtag = langtags.at(BOOST_LANGTAG_DIST_GEN());
+        //     result.append("@");
+        //     result.append(langtag);
+        //     break;
+        // }
 
+        // Langtag only on strings of class Review
         case LITERAL_TYPES::STRING: {
-            string langtag = langtags.at(BOOST_LANGTAG_DIST_GEN());
-            result.append("@");
-            result.append(langtag);
+            if (type_prefix.compare("bsbm:Review") == 0) {
+                string langtag = langtags.at(BOOST_LANGTAG_DIST_GEN());
+                result.append("@");
+                result.append(langtag);
+            }
             break;
         }
+        
     }
     return result;
 }
 
-string predicate_m_t::generate (const namespace_map & n_map){
-    string literal = model::generate_literal(_literal_type, _distribution_type, _var_length, _range_min, _range_max);
-    return format_literal(n_map, literal);
+string predicate_m_t::generate (const string & type_prefix, const namespace_map & n_map){
+    string literal = model::generate_literal(type_prefix, _literal_type, _distribution_type, _var_length, _range_min, _range_max);
+    return format_literal(type_prefix, n_map, literal);
 }
 
 predicate_group_m_t::predicate_group_m_t (){
@@ -832,7 +854,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                 if (draw<=predicate_group->_gen_probability){
                     for (vector<predicate_m_t*>::const_iterator itr3=predicate_group->_predicate_array.begin(); itr3!=predicate_group->_predicate_array.end(); itr3++){
                         predicate_m_t * predicate = *itr3;
-                        string predicate_value = predicate->generate(n_map);
+                        string predicate_value = predicate->generate(_type_prefix, n_map);
 
                         if (_type_prefix.compare("bsbm:Offer") == 0){
 
@@ -840,13 +862,14 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
 
                             if (predicate->_label.compare("bsbm:publishDate") == 0) {
                                 string publishDate = model::generate_literal(
+                                    _type_prefix,
                                     predicate->_literal_type, 
                                     predicate->_distribution_type, 
                                     predicate->_var_length, 
                                     predicate->_range_min, 
                                     predicate->_range_max
                                 );
-                                predicate_value = predicate->format_literal(n_map, publishDate);
+                                predicate_value = predicate->format_literal(_type_prefix, n_map, publishDate);
                                 _bsbm_data_cache.insert(pair<string, string>(key, publishDate));
 
                             } else if (predicate->_label.compare("bsbm:validFrom") == 0){
@@ -870,7 +893,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 predicate->_range_min = range_min;
                                 predicate->_range_max = publishDate;
 
-                                predicate_value = predicate->generate(n_map);
+                                predicate_value = predicate->generate(_type_prefix, n_map);
 
                             } else if (predicate->_label.compare("bsbm:validTo") == 0){
                                 string publishDate = _bsbm_data_cache.find(key)->second;
@@ -894,19 +917,20 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 predicate->_range_min = publishDate;
                                 predicate->_range_max = range_max;
 
-                                predicate_value = predicate->generate(n_map);
+                                predicate_value = predicate->generate(_type_prefix, n_map);
                             }
                         } else if (_type_prefix.compare("bsbm:Review") == 0) {
                             string key = "reviewDate_" + boost::lexical_cast<string>(id);
                             if (predicate->_label.compare("bsbm:reviewDate") == 0){
                                 string reviewDate = model::generate_literal(
+                                    _type_prefix,
                                     predicate->_literal_type, 
                                     predicate->_distribution_type, 
                                     predicate->_var_length, 
                                     predicate->_range_min, 
                                     predicate->_range_max
                                 );
-                                predicate_value = predicate->format_literal(n_map, reviewDate);
+                                predicate_value = predicate->format_literal(_type_prefix, n_map, reviewDate);
                                 _bsbm_data_cache.insert(pair<string, string>(key, reviewDate));
 
                             } else if (predicate->_label.compare("bsbm:publishDate")==0){
@@ -915,7 +939,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 predicate->_range_min = reviewDate;
                                 predicate->_range_max = TODAY;
 
-                                predicate_value = predicate->generate(n_map);
+                                predicate_value = predicate->generate(_type_prefix, n_map);
                             }
                         }
 
@@ -1002,7 +1026,7 @@ void resource_m_t::process_type_restrictions_one (const namespace_map & n_map, c
                     string nquad_str = "";                    
                     nquad_str.append(subject);
                     nquad_str.append("\t");
-                    nquad_str.append(predicate->generate(n_map));
+                    nquad_str.append(predicate->generate(_type_prefix, n_map));
                     nquad_str.append(n_map.get_provenance());
 
                     int tab1_index = nquad_str.find("\t");
@@ -1808,7 +1832,7 @@ string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_te
 string mapping_m_t::generate (const model & mdl, const query_template_m_t & q_template, unsigned int & instance_count){
     if (_is_literal_type){
         string result = "";
-        result.append(model::generate_literal(_literal_type, _distribution_type, _var_length, _range_min, _range_max));
+        result.append(model::generate_literal("", _literal_type, _distribution_type, _var_length, _range_min, _range_max));
         return result;
     } else {
         if (_type_restriction==NULL){
@@ -2446,7 +2470,7 @@ void model::parse (const char * filename){
     }
 }
 
-string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max){
+string model::generate_literal (const string & type_prefix, LITERAL_TYPES::enum_t literal_type, DISTRIBUTION_TYPES::enum_t distribution_type, const int & var_length, const string & range_min, const string & range_max){
     string literal = "";
     switch (literal_type){
         case LITERAL_TYPES::INTEGER:{
@@ -2490,7 +2514,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             for (unsigned int index=0; index<wc; index++){
                 literal.append(" ");
                 literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::ENGLISH_WORDS, rand()%dict_size)));
-            }
+            }            
             break;
         }
         case LITERAL_TYPES::NAME:{
@@ -2501,10 +2525,25 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
             offset = (offset<0) ? 0 : offset;
             offset = (offset>interval) ? interval : offset;
             literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::FIRST_NAMES, range.first + offset)));
+            // Keep appending a few more words from the dictionary...
+            unsigned int wc = rand() % var_length;
+            unsigned int dict_size = dictionary::get_instance()->word_count(DICTIONARY_TYPES::FIRST_NAMES);
+            for (unsigned int index=1; index<wc; index++){
+                literal.append(" ");
+                literal.append(*(dictionary::get_instance()->get_word(DICTIONARY_TYPES::FIRST_NAMES, rand()%dict_size)));
+            }
             break;
         }
         case LITERAL_TYPES::COUNTRY:{
-            string assigned_country = countries.at(BOOST_COUNTRY_DIST_GEN());
+            string assigned_country = "";
+            if (type_prefix.compare("bsbm:Vendor") == 0){
+                assigned_country = countries.at(VENDOR_BOOST_COUNTRY_DIST_GEN());
+            } else if (type_prefix.compare("bsbm:Producer") == 0){
+                assigned_country = countries.at(PRODUCER_BOOST_COUNTRY_DIST_GEN());
+            } else if (type_prefix.compare("bsbm:Person") == 0){
+                assigned_country = countries.at(PERSON_BOOST_COUNTRY_DIST_GEN());
+            }
+            
             literal.append("http://downlode.org/rdf/iso-3166/countries#");
             literal.append(assigned_country);
             break;
