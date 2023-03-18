@@ -841,8 +841,12 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
         nquad_st type_assertion_line(subject, "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>", heritage_object, provenance);
         fo << type_assertion_line << " . " << endl;
 
-        nquad_st sameAs_line(subject, "<http://www.w3.org/2002/07/owl#sameAs>", global_subject, provenance);
-        fo << sameAs_line << " . " << endl;
+        // Only allow global tags when specified in the config
+        string can_replicate = n_map.lookup("__replicated");
+        if ( can_replicate.compare("true") == 0 ) {
+            nquad_st sameAs_line(subject, "<http://www.w3.org/2002/07/owl#sameAs>", global_subject, provenance);
+            fo << sameAs_line << " . " << endl;
+        }
 
         // cout << subject << "\t" << "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" << "\t" << heritage_object << "." << endl;
         // cout << subject << "\t" << "<http://www.w3.org/2002/07/owl#sameAs>" << "\t" << global_subject << "." << endl;
