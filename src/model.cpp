@@ -879,7 +879,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                             } else if (predicate->_label.compare("bsbm:validFrom") == 0){
                                 string publishDate = _bsbm_data_cache.find(key)->second;
                                 boost::posix_time::ptime min_time, max_time;
-                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%dT%H:%M:%S"));
                         
                                 istringstream max_iss (publishDate);
                                 max_iss.imbue(format);
@@ -903,7 +903,7 @@ void resource_m_t::generate_one (const namespace_map & n_map, const unsigned int
                                 string publishDate = _bsbm_data_cache.find(key)->second;
 
                                 boost::posix_time::ptime min_time, max_time;
-                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+                                locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%dT%H:%M:%S"));
                         
                                 istringstream min_iss (publishDate);
                                 min_iss.imbue(format);
@@ -2554,7 +2554,7 @@ string model::generate_literal (const string & type_prefix, LITERAL_TYPES::enum_
         }
         case LITERAL_TYPES::DATE:{
             boost::posix_time::ptime min_time, max_time, gen_time;
-            locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+            locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%dT%H:%M:%S"));
             istringstream min_iss (range_min);
             min_iss.imbue(format);
             min_iss>>min_time;
