@@ -494,6 +494,12 @@ string predicate_m_t::format_literal(const namespace_map & n_map, const string &
         result.append(literal);
         result.append(">");
     }
+    // else if (_literal_type == LITERAL_TYPES::DATE) {
+    //     result.append("\"");
+    //     result.append(literal);
+    //     result.append("T00:00:00");
+    //     result.append("\"");
+    // }
     else {
         result.append("\"");
         result.append(literal);
@@ -2425,7 +2431,7 @@ string model::generate_literal (LITERAL_TYPES::enum_t literal_type, DISTRIBUTION
         }
         case LITERAL_TYPES::DATE:{
             boost::posix_time::ptime min_time, max_time, gen_time;
-            locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%d"));
+            locale format (locale::classic(),new boost::posix_time::time_input_facet("%Y-%m-%dT%H:%M:%S"));
             istringstream min_iss (range_min);
             min_iss.imbue(format);
             min_iss>>min_time;
